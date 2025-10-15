@@ -1,3 +1,0 @@
-z3-solver>=4.12
-rich>=13.0      # colored output
-pytest>=8.0     # test (optional)
