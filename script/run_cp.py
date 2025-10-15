@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # Decision-only runner (300s per solver). Writes <solver>_dec blocks only.
+# Changes:
+# - Gecode temporarily disabled
+# - Better logging: explicit [skip] when OR-Tools is not available
 
 import json, math, os, sys, time
 from datetime import timedelta
 
-# line-buffered logs (PowerShell mostra riga-per-riga)
+# line-buffered logs (better live output in PowerShell)
 try:
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
@@ -31,9 +34,13 @@ TLIMIT = 300  # fixed per-solver time limit (seconds)
 
 
 def pick_solver(candidates):
+    """Try to lookup any of the given solver IDs. Return (solver_obj, used_name) or (None, None)."""
     for name in candidates:
         try:
-            return Solver.lookup(name), name
+            s = Solver.lookup(name)
+            # sanity: log found solver id
+            log(f"[info] found solver id '{name}'")
+            return s, name
         except Exception:
             continue
     return None, None
@@ -55,8 +62,8 @@ def pack_solution(H, A, n):
 def solve_dec(model_path, n, solver_names):
     solver, used = pick_solver(solver_names)
     if solver is None:
-        used = solver_names[-1]
-        log(f"[skip] {used} | mode=dec | solver not available")
+        used = "/".join(solver_names)
+        log(f"[skip] {used} | mode=dec | solver not available (lookup failed)")
         return used, {"time": TLIMIT, "optimal": False, "obj": None, "sol": []}
 
     model = Model(model_path)
@@ -66,13 +73,12 @@ def solve_dec(model_path, n, solver_names):
     log(f"[run] {used} | mode=dec | tlimit={TLIMIT}s")
     t0 = time.perf_counter()
     try:
-        res = inst.solve(timeout=timedelta(seconds=TLIMIT))
+        res = inst.solve(timeout=timedelta(seconds=TLIMIT), all_solutions=False)
         elapsed = math.floor(time.perf_counter() - t0)
     except Exception as e:
         log(f"[done] {used} | mode=dec | ERROR: {e}")
         return used, {"time": TLIMIT, "optimal": False, "obj": None, "sol": []}
 
-    # has_solution: alcune versioni espongono il metodo su res.status
     st = res.status
     has_solution = getattr(st, "has_solution", lambda: False)()
 
@@ -111,15 +117,18 @@ def main():
     os.makedirs(OUTDIR, exist_ok=True)
     model_dec = os.path.join(SRC_CP, "sts_decision.mzn")
 
+    # --- Solver pipeline (Gecode temporarily disabled) ---
     solver_specs = [
-        ["gecode"],
+        # ["gecode"],  # disabled for now
         ["chuffed"],
-        ["or-tools", "org.or-tools"],  # loggheremo anche il caso 'not available'
+        ["cp-sat"],  # OR-Tools CP-SAT
+        ["highs"],
     ]
 
     results = {}
     for spec in solver_specs:
         used_name, out = solve_dec(model_dec, n, spec)
+        # normalize key for or-tools
         key = used_name if used_name else "|".join(spec)
         if key == "or-tools":
             key = "ortools"
