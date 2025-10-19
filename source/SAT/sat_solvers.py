@@ -117,7 +117,7 @@ def solve_pysat_with_timeout(solver, timeout_sec: int):
     t.start()
 
     try:
-        # Nessun budget: lasciamo che sia l'interrupt a fermare la ricerca
+        # Interrupt a ferma la ricerca dopo 300 secondi
         res = solver.solve_limited(expect_interrupt=True)
     finally:
         # Evita che il thread interrompa *dopo* che abbiamo finito

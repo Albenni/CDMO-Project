@@ -14,8 +14,9 @@ from sat_solvers import (
     solve_pysat_with_timeout,
 )
 from sts_sat_model import build_base_formula
+from json_output import merge_and_dump
 
-TIME_LIMIT_SEC = 300  # 5 minuti come da specifiche progetto
+TIME_LIMIT_SEC = 300
 
 def build_solution_matrix_from_model_z3(model, pool, n):
     import z3
@@ -62,43 +63,11 @@ def build_solution_matrix_from_model_pysat(model, pool, n):
                 sol[p - 1][w - 1] = [i, j]
     return sol
 
-
-def _merge_and_dump(out_dir: str, n: int, key: str, entry: dict):
-    """
-    Legge res/SAT/<n>.json se esiste, aggiunge/aggiorna la voce <key>.
-    Se <key> è già presente, crea una chiave unica con suffisso _2, _3, ...
-    Scrive il JSON aggiornato e ritorna (final_key, full_data_dict).
-    """
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"{n}.json")
-    data = {}
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, dict):
-                    data = loaded
-        except Exception:
-            # se non leggibile, ripartiamo da vuoto
-            data = {}
-
-    final_key = key
-    k = 2
-    while final_key in data:
-        final_key = f"{key}_{k}"
-        k += 1
-
-    data[final_key] = entry
-    with open(path, "w") as f:
-        json.dump(data, f)
-    return final_key, data
-
-
 def solve_decision(n: int, solver_name: str):
     if n % 2 != 0 or n < 2:
         raise ValueError("n deve essere pari e >= 2.")
     solver_name = normalize_solver_name(solver_name)
-
+    
     # Costruzione formula base
     clauses, home_vars, pool = build_base_formula(n)
 
@@ -181,7 +150,7 @@ def solve_decision(n: int, solver_name: str):
 
     # Scrivi in modo ACCUMULATIVO
     out_dir = os.path.join("res", "SAT")
-    final_key, full_data = _merge_and_dump(out_dir, n, json_solver_key, entry)
+    final_key, full_data = merge_and_dump(out_dir, n, json_solver_key, entry)
     return {final_key: entry}
 
 
