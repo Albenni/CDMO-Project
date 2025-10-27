@@ -1,6 +1,8 @@
 % --- Sports Timetabling (decision-only, 0-1 lean + channeling) ---
 int: n;                 % even
 constraint n mod 2 = 0;
+/* consenti solo n == 2 oppure n > 5 */
+constraint (n = 2 \/ n > 5);
 
 set of int: Teams   = 1..n;
 set of int: Weeks   = 1..(n - 1);
