@@ -1,0 +1,28 @@
+{
+  "cp-sat_dec": {
+    "time": 0,
+    "optimal": false,
+    "obj": null,
+    "sol": [
+      [
+        [
+          1,
+          2
+        ]
+      ]
+    ]
+  },
+  "chuffed_dec": {
+    "time": 0,
+    "optimal": false,
+    "obj": null,
+    "sol": [
+      [
+        [
+          1,
+          2
+        ]
+      ]
+    ]
+  }
+}

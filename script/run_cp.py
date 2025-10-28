@@ -5,8 +5,8 @@ import json, math, os, sys, time
 from datetime import timedelta
 
 # ======= RUN SWITCHES (set here) =========================================
-RUN_DEC = True  # run decision model?
-RUN_OPT = False  # run optimization model?
+RUN_DEC = False  # run decision model?
+RUN_OPT = True  # run optimization model?
 # =========================================================================
 
 # line-buffered logs (better live output in PowerShell)
@@ -180,7 +180,7 @@ def main():
 
     solver_specs = [
         # "gecode"],  # GeCode
-        # ["cp-sat"],  # OR-Tools CP-SAT
+        ["cp-sat"],  # OR-Tools CP-SAT
         ["chuffed"],
         # ["org.minizinc.mip.highs"],  # optional; skip if not available
     ]
