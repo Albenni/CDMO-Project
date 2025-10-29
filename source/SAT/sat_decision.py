@@ -1,36 +1,50 @@
 # sat_decision.py
-# Risoluzione decisionale del problema STS in SAT puro, con selezione solver dinamica.
-# Output JSON ACCUMULATIVO: res/SAT/<n>.json con una voce per ciascun solver/approccio.
+# STS decision solving in SAT, with DIMACS export for "standalone" solvers.
+# CUMULATIVE JSON output: res/SAT/<n>.json with one entry per solver/approach.
 
 import os
 import sys
-import json
 import time
 
 from sat_solvers import (
     get_solver_kind,
     get_available_solvers_list,
     normalize_solver_name,
-    solve_pysat_with_timeout,
+    export_dimacs,
+    run_dimacs_with_pysat,
 )
 from sts_sat_model import build_base_formula
 from json_output import merge_and_dump
 
 TIME_LIMIT_SEC = 300
 
+
+def _max_var_from(pool, clauses):
+    """Derives the max variable index for consistency with the IDPool."""
+    try:
+        return pool.top
+    except Exception:
+        pass
+    try:
+        print("Using pool._next_id for max var derivation.")
+        return pool._next_id - 1
+    except Exception:
+        pass
+    mv = 0
+    for c in clauses:
+        for l in c:
+            if abs(l) > mv:
+                mv = abs(l)
+    print("Max var derived manually:", mv)
+    return mv
+
+
 def build_solution_matrix_from_model_z3(model, pool, n):
     import z3
-    # ricostruiamo la matrice (n/2 x (n-1)) leggendo le X vere
+    # rebuild the matrix (n/2 x (n-1)) by reading the true X variables
     sol = [[None for _ in range(n - 1)] for __ in range(n // 2)]
-    # tentiamo di capire il top id
-    try:
-        max_var = pool.top
-    except Exception:
-        try:
-            max_var = pool._next_id - 1
-        except Exception:
-            max_var = 0
-            
+
+    max_var = _max_var_from(pool, [])
     z3_vars = {i: z3.Bool(f"v{i}") for i in range(1, max_var + 1)}
 
     for w in range(1, n):
@@ -51,7 +65,7 @@ def build_solution_matrix_from_model_z3(model, pool, n):
 
 
 def build_solution_matrix_from_model_pysat(model, pool, n):
-    # model è una lista di interi (literal positivi = veri)
+    # model is a list of integers (positive literals = true)
     sol = [[None for _ in range(n - 1)] for __ in range(n // 2)]
     for lit in model:
         if lit > 0:
@@ -63,92 +77,105 @@ def build_solution_matrix_from_model_pysat(model, pool, n):
                 sol[p - 1][w - 1] = [i, j]
     return sol
 
+
 def solve_decision(n: int, solver_name: str):
     if n % 2 != 0 or n < 2:
-        raise ValueError("n deve essere pari e >= 2.")
+        raise ValueError("n must be even and >= 2.")
     solver_name = normalize_solver_name(solver_name)
-    
-    # Costruzione formula base
+
+    # Build base formula (pure SAT model)
     clauses, home_vars, pool = build_base_formula(n)
 
-    # Se utente chiede elenco solver
+    # -- Solver list request
     if solver_name in {"--list", "list", "--list-solvers"}:
         avail = get_available_solvers_list()
-        print("Solver disponibili:", ", ".join(avail))
+        print("Available solvers:", ", ".join(avail))
         return None
 
-    solver_kind = get_solver_kind(solver_name)  # 'z3' oppure classe PySAT
+    # Identify solver type
+    solver_kind = get_solver_kind(solver_name)  # 'z3' or a PySAT class
 
-    t0 = time.time()
     result_sol_matrix = None
     solved = False
-    json_solver_key = solver_name  # chiave base per il JSON
+    json_solver_key = solver_name  # base key in the JSON
+    total_start = None
+    gen_time = 0.0
+    solve_time = 0.0
 
     if solver_kind == "z3":
+        # === Z3: no file, send the propositional clauses directly ===
         import z3
         s = z3.Solver()
-        s.set("timeout", TIME_LIMIT_SEC * 1000)  # ms
-        # Ricostruzione variabili Z3 e aggiunta clausole
-        try:
-            max_var = pool.top
-        except Exception:
-            try:
-                max_var = pool._next_id - 1
-            except Exception:
-                max_var = 0
-                for c in clauses:
-                    for l in c:
-                        if abs(l) > max_var:
-                            max_var = abs(l)
+        s.set("timeout", TIME_LIMIT_SEC * 1000)  # in ms
+
+        # Rebuild Z3 variables and add clauses
+        max_var = _max_var_from(pool, clauses)
         z3_vars = {i: z3.Bool(f"v{i}") for i in range(1, max_var + 1)}
         for c in clauses:
             s.add(z3.Or(*[(z3_vars[l] if l > 0 else z3.Not(z3_vars[-l])) for l in c]))
+
+        total_start = time.time()
+        t_s = time.time()
         res = s.check()
+        solve_time = time.time() - t_s
+
         if res == z3.sat:
             model = s.model()
+            # print(model)
             result_sol_matrix = build_solution_matrix_from_model_z3(model, pool, n)
             solved = True
         else:
             solved = False
+        # gen_time stays 0.0 (no file for Z3)
     else:
-        # PySAT
-        SolverClass = solver_kind
-        solver = SolverClass(bootstrap_with=clauses)
+        # === PySAT: export DIMACS and then solve by reading the file ===
+        cnf_dir = os.path.join("res", "SAT", "dimacs")
+        os.makedirs(cnf_dir, exist_ok=True)
+        cnf_path = os.path.join(cnf_dir, f"{n}.cnf")
 
-        # Proviamo a rispettare il TIME_LIMIT_SEC se possibile
-        res = solve_pysat_with_timeout(solver, TIME_LIMIT_SEC)
+        # print("Exporting DIMACS to", cnf_path)
+
+        total_start = time.time()
+        t_g = time.time()
+        max_var = _max_var_from(pool, clauses)
+        export_dimacs(clauses, max_var, cnf_path)
+        gen_time = time.time() - t_g
+
+        # remaining timeout for solving
+        remaining = max(1, int(TIME_LIMIT_SEC - gen_time))
+        t_s = time.time()
+        res, model = run_dimacs_with_pysat(solver_name, cnf_path, remaining)
+        solve_time = time.time() - t_s
+
         if res is True:
-            model = solver.get_model()
             result_sol_matrix = build_solution_matrix_from_model_pysat(model, pool, n)
             solved = True
         elif res is False:
             solved = False  # UNSAT
         else:
-            # Timeout (nessuna risposta definitiva)
-            solved = False
+            solved = False  # timeout/interrupted
+        
+        print(f"[{solver_name}] Generation (DIMACS): {gen_time:.2f}s, "
+          f"Solving: {solve_time:.2f}s, Total: {gen_time + solve_time:.2f}s")
 
-        # Libera risorse nativamente
-        try:
-            solver.delete()
-        except Exception:
-            pass
-
-    elapsed = time.time() - t0
+    # Total time (from export DIMACS or from Z3 start)
+    elapsed = time.time() - total_start
     runtime = int(elapsed // 1)
     if not solved and runtime < TIME_LIMIT_SEC:
         runtime = TIME_LIMIT_SEC
     if runtime > TIME_LIMIT_SEC:
         runtime = TIME_LIMIT_SEC
+    
 
-    # Entry per questo run
+    # Entry for this run (decision problem: obj=None)
     entry = {
         "time": runtime,
         "optimal": bool(solved),
-        "obj": None,          # nessun obiettivo nella versione decisionale
+        "obj": None,
         "sol": result_sol_matrix
     }
 
-    # Scrivi in modo ACCUMULATIVO
+    # CUMULATIVE JSON write
     out_dir = os.path.join("res", "SAT")
     final_key, full_data = merge_and_dump(out_dir, n, json_solver_key, entry)
     return {final_key: entry}
@@ -156,10 +183,10 @@ def solve_decision(n: int, solver_name: str):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Uso: python sat_decision.py <n_pari> <solver_name>|--list")
+        print("Usage: python sat_decision.py <even_n> <solver_name>|--list")
         sys.exit(1)
     if sys.argv[2] in {"--list", "list", "--list-solvers"}:
-        print("Solver disponibili:", ", ".join(get_available_solvers_list()))
+        print("Available solvers:", ", ".join(get_available_solvers_list()))
         sys.exit(0)
     n = int(sys.argv[1])
     name = sys.argv[2]

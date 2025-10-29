@@ -1,0 +1,170 @@
+\documentclass{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Project Title}
+\author{Name, lastname and UniBo e-mail addresses\\
+of the authors, in alphabetical order}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\noindent
+Please do not be verbose. Describe only the relevant information, and omit the unnecessary/redundant details. Use a high-level, mathematical language in your model description, as was done in your course material. Do not copy and paste any piece of code in the report.
+
+\medskip
+
+\noindent
+The report should be written in \LaTeX{} using \verb|\documentclass{article}| without changing fonts, font size and margins. The page limit is 12 pages with three optimization approaches and 15 pages with all the approaches, excluding the authenticity and the author contribution statement and the references. You do not need to reach the page limit. You are recommended to use \texttt{www.overleaf.com/} to produce a shared \LaTeX{} document.
+
+\section{Introduction}
+
+You do not need to introduce the problem, nor the optimization methods that you are using to tackle the problem. After a proper introduction to your report, describe and formalize what is common to all the models (such as input parameters, the objective variable and its bounds, pre-processing steps, \dots). Refer to this section where necessary instead of copying and pasting text in the following sections.
+
+\section{CP Model}
+
+This part is mandatory for all groups.
+
+\subsection{Decision variables}
+
+Describe all the decision variables of your model, their initial domains (such as the lower and upper bounds), and their semantics. For example, ``The variable $B_i$ has the domain $[0..100]$ with the meaning that $B_i = j$ iff the baker $i$ cooks $j$ cakes, for $i = 1, \dots, n$.''
+
+\subsection{Objective function}
+
+If the objective variable and/or its bounds is specific to this model, describe here what is not covered in Section~1. Then explain the objective function. For example, ``the objective function is to minimize \textit{area} where
+\[
+\textit{area} = \sum_{i=1}^{n} W_i \times H_i,
+\]
+because we need to minimize the total area. The bounds of the \textit{area} variable were previously discussed in Section~1.''
+
+\subsection{Constraints}
+
+State the problem constraints, give their formulation and explain them. For example, ``One constraint of the problem is that all locations should be distinct. We impose this via the global constraint \texttt{allDifferent}$( [L_1, \dots, L_n] )$ which enforces that the location variables $L_i$ for $i = 1, \dots, n$ take different values.''
+
+Start with the main problem constraints (i.e., the constraints that are strictly necessary) and then focus on the possible implied and symmetry breaking constraints that can help improve the model performance in the following subsections.
+
+\paragraph{Implied constraints.} Optional, depending on the model formulation. In addition to the indication given in Section~2.3, discuss why the extra constraints are implied and how they could be useful.
+
+\paragraph{Symmetry breaking constraints.} Optional, but highly recommended. In addition to the indication given in Section~2.3, describe which symmetries you observe in your model and discuss how the extra symmetry breaking constraints can reduce the observed symmetry.
+
+\subsection{Validation}
+
+The model must be implemented in MiniZinc and run using at least Gecode. Bonus points will be considered if other solvers are tried. The purpose of the validation is to assess the performance of the solvers using various models and search strategies. It is a good practice to evaluate also the contribution of the implied and symmetry breaking constraints.
+
+\subsubsection*{Experimental design}
+
+Before presenting your experimental results, give all the details of your experimental study. Your results should be reproducible following your description. Explain which solvers you used and which search strategies you employed, as well as your experimental set up (e.g., the hardware and the software used, any posed time limit, etc.). Irreproducible experiments will not be considered.
+
+\subsubsection*{Experimental results}
+
+Present your experimental results in a clear way. It is mandatory to show a table where:
+\begin{itemize}
+    \item rows are labeled with the identifier of the instances,
+    \item columns are labeled with the different approaches you tried,
+    \item cells contain the runtime in seconds (in the decision version) or the best objective value (in the optimization version), as specified in the project description, found by the given approach on the given instance, using a certain search strategy.
+\end{itemize}
+
+If the instance is solved to optimality, emphasize the objective value in bold. If the instance is proved to be unsatisfiable, indicate it as ``UNSAT''. If no answer is obtained within the time limit, indicate it with ``N/A'' or ``-''.
+
+For example, ``The results obtained using the search strategy $h$ are reported in Table~\ref{tab:results}.''
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lcccc}
+        \toprule
+        ID &
+        Chuffed + SB &
+        Chuffed w/out SB &
+        Gecode + SB &
+        Gecode w/out SB \\
+        \midrule
+        1 & 100 & 120 & 80  & 80 \\
+        2 & 50  & 60  & N/A & N/A \\
+        3 & UNSAT & UNSAT & N/A & N/A \\
+        \bottomrule
+    \end{tabular}
+    \caption{Results using Gecode and Chuffed with and without symmetry breaking using the search strategy $h$.}
+    \label{tab:results}
+\end{table}
+
+\section{SAT Model}
+
+This part is mandatory for groups of 4 students. Groups up to 3 students can choose between SAT and SMT, and will be given bonus points if they do both.
+
+\subsection{Decision variables}
+
+Describe all the literals of your model and their semantics. For example, $\Delta_{i,j} = \text{true}$ iff the driver goes from city $i$ to city $j$.
+
+\subsection{Objective function}
+
+See Section~2.2. Explain how you managed to do optimization in SAT.
+
+\subsection{Constraints}
+
+Describe all the clauses of your model and their semantics. In particular, describe the encoding(s) that you used. Follow the indications given in Section~2.3 for main problem constraints, implied constraints, and symmetry breaking constraints.
+
+\subsection{Validation}
+
+See Section~2.4. The model must be implemented using at least Z3. Bonus points will be considered if a solver-independent language (e.g., Dimacs) is employed so as to play with different SAT solvers on the same model.
+
+\section{SMT Model}
+
+This part is mandatory for groups of 4 students. Groups up to 3 students can choose between SAT and SMT, and will be given bonus points if they do both.
+
+\subsection{Decision variables}
+
+See Section~2.1. Specify the sort of each variable and the theory used.
+
+\subsection{Objective function}
+
+See Section~2.2.
+
+\subsection{Constraints}
+
+See Section~2.3.
+
+\subsection{Validation}
+
+See Section~2.4. The model must be implemented using at least Z3 or CVC5. Bonus points will be considered if a solver-independent language (e.g., SMT-LIB) is employed so as to play with different SMT solvers on the same model.
+
+\section{MIP Model}
+
+This part is mandatory for all groups.
+
+\subsection{Decision variables}
+
+See Section~2.1.
+
+\subsection{Objective function}
+
+See Section~2.2. Note that the objective function must be linear.
+
+\subsection{Constraints}
+
+See Section~2.3. Note that each constraint must be linear.
+
+\subsection{Validation}
+
+See Section~2.4. Bonus points will be considered if a solver-independent language (e.g., AMPL) is employed so as to play with different MIP solvers on the same model.
+
+\section{Conclusions}
+
+Write down briefly your concluding remarks.
+
+\section*{Authenticity and Author Contribution Statement}
+
+Declare that the described work is your own and that you did not copy it from someone else. The report should cite properly any idea taken from any person or resource.
+
+The use of AI-generated text in the report is allowed but must be disclosed. The sections using AI-generated text, and in general any part of the project developed with AI tools, must reference the AI system used.
+
+Also, briefly describe each author's contribution to the work.
+
+\section*{References}
+
+List of references.
+
+\end{document}

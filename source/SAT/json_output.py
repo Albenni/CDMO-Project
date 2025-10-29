@@ -2,9 +2,9 @@ import os
 import json
 
 def merge_and_dump(out_dir: str, n: int, key: str, entry: dict):
-    """Accoda/sovrascrive in res/SAT/<n>.json una voce <key> con il risultato.
-    Se <key> esiste già, genera suffissi _2, _3, ...
-    Ritorna (final_key, full_data_dict).
+    """Append/overwrite in res/SAT/<n>.json an entry <key> with the result.
+    If <key> already exists, generate suffixes _2, _3, ...
+    Returns (final_key, full_data_dict).
     """
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"{n}.json")

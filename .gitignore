@@ -1,1 +1,11 @@
 *.pdf
+res/
+*.DS_Store
+__pycache__/
+
+# Latex build files
+*.aux
+*.log
+*.out
+*.toc
+*.gz
