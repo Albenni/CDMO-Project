@@ -1,2 +1,3 @@
 python-sat
 z3-solver
+pyomo

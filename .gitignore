@@ -9,3 +9,5 @@ __pycache__/
 *.out
 *.toc
 *.gz
+
+.venv
