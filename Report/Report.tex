@@ -27,29 +27,120 @@ You do not need to introduce the problem, nor the optimization methods that you 
 
 \section{CP Model}
 
-This part is mandatory for all groups.
+We provide two MiniZinc models for the Sports Tournament Scheduling (STS) problem:
+a \emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization} model (\texttt{sts\_opt.mzn}).
+Both use the canonical index sets
+$\text{Teams}=\{1,\dots,n\}$ (with $n$ even), $\text{Weeks}=\{1,\dots,n-1\}$,
+$\text{Periods}=\{1,\dots,n/2\}$.
+The decision model additionally restricts $n$ to $(n=2)\vee(n>5)$ due to the period–load cap ($\le 2$), which makes $n=4$ infeasible.
 
 \subsection{Decision variables}
+\paragraph{Common notation and index cleanup (rectangular arrays).}
+We keep arrays over rectangular index sets and disable meaningless cells by fixing them to constants.
+In particular, we only model unordered pairs and forbid $i\ge j$ by setting $Z[w,p,i,j]=0$;
+in the optimization model we also set $B[i,j]=0$ and $W[i,j]=1$ for $i\ge j$.
+This preserves rectangular arrays while removing free variables.
 
-Describe all the decision variables of your model, their initial domains (such as the lower and upper bounds), and their semantics. For example, ``The variable $B_i$ has the domain $[0..100]$ with the meaning that $B_i = j$ iff the baker $i$ cooks $j$ cakes, for $i = 1, \dots, n$.''
+\paragraph{Decision model (\texttt{sts\_decision.mzn}).}
+\begin{itemize}
+  \item \textbf{Slot--pair assignment.}
+  $Z_{w,p,i,j}\in\{0,1\}$ for $w\in\text{Weeks}$, $p\in\text{Periods}$, $1\le i<j\le n$.
+  Semantics: $Z_{w,p,i,j}=1$ iff slot $(w,p)$ hosts the unordered pair $\{i,j\}$.
+  \item \textbf{Team--slot occupancy.}
+  $U_{w,p,t}\in\{0,1\}$ for $w\in\text{Weeks}$, $p\in\text{Periods}$, $t\in\text{Teams}$.
+  Semantics: $U_{w,p,t}=1$ iff team $t$ plays in slot $(w,p)$ (either side).
+  \item \textbf{Output view (home/away).}
+  $H_{p,w},A_{p,w}\in\text{Teams}$.
+  Semantics: values exposed to the checker; in the decision model they are
+  \emph{canonically derived} from $Z$ by $H_{p,w}=\min\{i,j\}$,
+  $A_{p,w}=\max\{i,j\}$ for the unique $(i<j)$ with $Z_{w,p,i,j}=1$.
+\end{itemize}
+
+\paragraph{Optimization model (\texttt{sts\_opt.mzn}).}
+\begin{itemize}
+  \item \textbf{Same $Z$ and $U$} as above, with the same domains and meaning.
+  \item \textbf{Week of each pair (dual viewpoint).}
+  $W_{i,j}\in\text{Weeks}$ for $1\le i<j\le n$.
+  Semantics: week in which the pair $\{i,j\}$ is played.
+  \item \textbf{Orientation (home/away) of each pair.}
+  $B_{i,j}\in\{0,1\}$ for $i<j$.
+  Semantics: $B_{i,j}=1\Rightarrow i$ is home vs.\ $j$; otherwise $j$ is home vs.\ $i$.
+  \item \textbf{Exact period--usage profile.}
+  $C_{t,p}\in\{1,2\}$ for $t\in\text{Teams}$, $p\in\text{Periods}$.
+  Semantics: number of appearances of team $t$ in period $p$ across the season.
+  \item \textbf{Output view (home/away).}
+  $H_{p,w},A_{p,w}\in\text{Teams}$.
+  Semantics: values exposed to the checker, \emph{derived} from $(Z,B)$ without disjunctions.
+  \item \textbf{Home counts and deviation.}
+  $Hc_t\in\{0,\dots,n-1\}$ for $t\in\text{Teams}$ (home matches of $t$);
+  $\text{dev}_t\in\{1,\dots,n-1\}$ (absolute imbalance of $t$).
+  \item \textbf{Objective.}
+  $\text{obj}\in\{0,\dots,n(n-1)\}$ with $\text{obj}=\sum_{t} \text{dev}_t$.
+\end{itemize}
 
 \subsection{Objective function}
+The decision model is a pure feasibility formulation (\texttt{solve satisfy}).
 
-If the objective variable and/or its bounds is specific to this model, describe here what is not covered in Section~1. Then explain the objective function. For example, ``the objective function is to minimize \textit{area} where
+The optimization model minimizes the global home/away imbalance:
 \[
-\textit{area} = \sum_{i=1}^{n} W_i \times H_i,
+\min\ \text{obj}=\sum_{t\in\text{Teams}}\text{dev}_t,
 \]
-because we need to minimize the total area. The bounds of the \textit{area} variable were previously discussed in Section~1.''
+where the home count is computed as
+\[
+Hc_t=\sum_{j>t} B_{t,j}+\sum_{i<t} (1-B_{i,t}),
+\]
+and the absolute deviation is linearized via
+\[
+\text{dev}_t\ \ge\ 2Hc_t-(n-1),\qquad
+\text{dev}_t\ \ge\ -(2Hc_t-(n-1)).
+\]
+We also add the redundant global equality $\sum_t Hc_t = \frac{n(n-1)}{2}$ (total homes equals the number of matches),
+and bound the objective as $n\le \text{obj}\le 2n$ (even $n$), which prunes clearly suboptimal branches without forcing feasibility-at-optimum.
 
 \subsection{Constraints}
 
-State the problem constraints, give their formulation and explain them. For example, ``One constraint of the problem is that all locations should be distinct. We impose this via the global constraint \texttt{allDifferent}$( [L_1, \dots, L_n] )$ which enforces that the location variables $L_i$ for $i = 1, \dots, n$ take different values.''
+\paragraph{Main problem constraints.}
+\begin{align*}
+&\textbf{(one match per slot)} && \forall w\in\text{Weeks},\ \forall p\in\text{Periods}:
+&& \sum_{1\le i<j\le n} Z_{w,p,i,j} = 1.\\[4pt]
+&\textbf{(each pair once)} && \forall\,1\le i<j\le n:
+&& \sum_{w\in\text{Weeks}}\sum_{p\in\text{Periods}} Z_{w,p,i,j}=1.\\[4pt]
+&\textbf{(weekly participation)} && \forall w\in\text{Weeks},\ \forall t\in\text{Teams}:
+&& \sum_{p\in\text{Periods}} U_{w,p,t} = 1.\\[4pt]
+&\textbf{(period load cap)} && \forall t\in\text{Teams},\ \forall p\in\text{Periods}:
+&& \sum_{w\in\text{Weeks}} U_{w,p,t}\ \le\ 2.\\[6pt]
+&\textbf{(channeling $U\!\leftrightarrow\! Z$)} && \forall w,p,t:
+&& U_{w,p,t}=\sum_{j>t} Z_{w,p,t,j}+\sum_{i<t} Z_{w,p,i,t}.
+\end{align*}
 
-Start with the main problem constraints (i.e., the constraints that are strictly necessary) and then focus on the possible implied and symmetry breaking constraints that can help improve the model performance in the following subsections.
+\paragraph{Optimization-specific constraints (dual viewpoint and globals).}
+We use $\mathbf{1}[\cdot]$ for indicator functions ($1$ if the predicate holds, $0$ otherwise).
+\begin{align*}
+&\textbf{(channeling $W\!\leftrightarrow\! Z$)} && \forall i<j:\quad \sum_{w} \mathbf{1}[W_{i,j}=w]=1,
+\qquad \forall w:\ \mathbf{1}[W_{i,j}=w]=\sum_{p} Z_{w,p,i,j}.\\[4pt]
+&\textbf{(alldifferent on weeks per team)} && \forall t\in\text{Teams}:\quad
+\texttt{alldifferent}\Big(\,[W_{\min(t,j),\max(t,j)}\mid j\neq t]\,\Big).\\[4pt]
+&\textbf{(output construction $Z,B\!\Rightarrow\!(H,A)$)} && \forall w,p:
+&& \text{$H_{p,w}$ and $A_{p,w}$ are selected from the unique $\{i,j\}$ in $(w,p)$ according to $B_{i,j}$.}
+\end{align*}
 
-\paragraph{Implied constraints.} Optional, depending on the model formulation. In addition to the indication given in Section~2.3, discuss why the extra constraints are implied and how they could be useful.
+\paragraph{Implied constraints.}
+\begin{align*}
+&\textbf{(exact period profile)} && \forall t,p:\quad C_{t,p}=\sum_{w} U_{w,p,t},\quad C_{t,p}\in\{1,2\},\\
+&&& \forall t:\quad \sum_{p} C_{t,p}=n-1,\quad \sum_{p} \mathbf{1}[C_{t,p}=1]=1.
+\end{align*}
+Rationale: with $P=n/2$ periods and the cap $\sum_w U_{w,p,t}\le 2$, arithmetic implies that each team uses exactly one period once and all others twice; encoding this profile strengthens propagation compared to a plain ``$\le 2$'' bound.
+We also keep the redundant equality $\sum_t Hc_t = \frac{n(n-1)}{2}$ (already mentioned in the objective section) to aid propagation.
 
-\paragraph{Symmetry breaking constraints.} Optional, but highly recommended. In addition to the indication given in Section~2.3, describe which symmetries you observe in your model and discuss how the extra symmetry breaking constraints can reduce the observed symmetry.
+\paragraph{Symmetry breaking constraints.}
+\begin{itemize}
+  \item \textbf{Week 1 canonical pairing (both models):}
+  fix Week~1 to $(1,2),(3,4),\dots,(n-1,n)$ by $Z_{1,p,2p-1,2p}=\texttt{true}$ for all $p$.
+  \item \textbf{Week 1 orientation (optimization model):}
+  set $B_{2p-1,2p}=\texttt{true}$ for all $p$, i.e., the odd-indexed team is home in Week~1.
+  \item \textbf{Canonical home/away in the decision model:}
+  $H=\min,\,A=\max$ in every slot removes the global flip symmetry.
+\end{itemize}
 
 \subsection{Validation}
 
