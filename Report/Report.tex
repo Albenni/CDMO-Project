@@ -259,29 +259,170 @@ See Section~2.4. The model must be implemented using at least Z3 or CVC5. Bonus 
 
 \section{MIP Model}
 
-This part is mandatory for all groups.
-
 \subsection{Decision variables}
 
-See Section~2.1.
+The model involves two main groups of binary decision variables, each belonging to a different stage of the two-step Mixed Integer Programming (MIP) formulation.
+
+\paragraph{Stage A (Feasibility model).} 
+\begin{itemize}
+    \item \textbf{Variable:} $x_{i,j,w,p} \in \{0,1\}$ 
+    \item \textbf{Domain:} Binary
+    \item \textbf{Semantics:} 
+    \[
+    x_{i,j,w,p} = 
+    \begin{cases}
+        1 & \text{if the match between teams } i \text{ and } j \text{ in week } w \text{ is assigned to period } p,\\
+        0 & \text{otherwise.}
+    \end{cases}
+    \]
+    \item \textbf{Indices:} 
+    \[
+    i,j \in \{1,\dots,n\}, \quad i < j, \quad w \in \{1,\dots,n-1\}, \quad p \in \{1,\dots,n/2\}.
+    \]
+\end{itemize}
+The variable defines the temporal and spatial positioning of all matches within the tournament grid, ensuring that each game is played exactly once and that each slot (week–period pair) hosts a single match.
+
+\paragraph{Stage B (Objective model – Home/Away balance).} 
+\begin{itemize}
+    \item \textbf{Variable:} $s_{i,j,w} \in \{0,1\}$ 
+    \item \textbf{Domain:} Binary
+    \item \textbf{Semantics:}
+    \[
+    s_{i,j,w} = 
+    \begin{cases}
+        1 & \text{if team } i \text{ (the lower index in } (i,j)) \text{ plays at home in week } w,\\
+        0 & \text{otherwise.}
+    \end{cases}
+    \]
+    \item \textbf{Variable:} $\mathrm{dev}_i \geq 0$
+    \item \textbf{Domain:} Non-negative reals
+    \item \textbf{Semantics:} Represents the deviation of team $i$ from the ideal number of home games, 
+    \[
+    \text{target} = \frac{n-1}{2}.
+    \]
+\end{itemize}
+
+Thus, Stage~A guarantees \textit{feasibility} of the schedule, while Stage~B optimizes \textit{fairness} in home/away distribution.
+
+---
 
 \subsection{Objective function}
 
-See Section~2.2. Note that the objective function must be linear.
+The goal is to minimize the total deviation of the number of home games from the ideal target value for all teams:
+\begin{equation}
+    \min \sum_{i=1}^{n} \mathrm{dev}_i
+\end{equation}
+subject to:
+\begin{align}
+    \mathrm{home}_i - \mathrm{target} &\leq \mathrm{dev}_i, \quad \forall i \in T, \\
+    \mathrm{target} - \mathrm{home}_i &\leq \mathrm{dev}_i, \quad \forall i \in T,
+\end{align}
+where
+\begin{equation}
+\mathrm{home}_i = 
+\sum_{(a,b,w) \in E_W}
+\begin{cases}
+s_{a,b,w} & \text{if } a = i,\\[2pt]
+(1 - s_{a,b,w}) & \text{if } b = i,\\[2pt]
+0 & \text{otherwise.}
+\end{cases}
+\end{equation}
+
+The variable $\mathrm{home}_i$ counts how many matches team $i$ plays at home.  
+The target $(n-1)/2$ corresponds to an ideally balanced schedule where each team plays half of its matches at home.  
+Thus, the objective minimizes the \emph{sum of absolute deviations} to ensure the fairest possible schedule.
 
 \subsection{Constraints}
 
-See Section~2.3. Note that each constraint must be linear.
+\begin{enumerate}
+    \item \textbf{One period per match:}
+    \begin{equation}
+        \sum_{p=1}^{n/2} x_{i,j,w,p} = 1, \quad \forall (i,j,w) \in E_W.
+    \end{equation}
+
+    Each match is assigned to exactly one period in its corresponding week.
+
+    \item \textbf{One match per slot:}
+    \begin{equation}
+        \sum_{\substack{(i,j,ww) \in E_W \\ ww=w}} x_{i,j,ww,p} = 1, 
+        \quad \forall w \in W, \; \forall p \in P.
+    \end{equation}
+    Ensures that each (week, period) slot is occupied by one and only one match.
+
+    \item \textbf{Period cap constraint:}
+    \begin{equation}
+        \sum_{\substack{(a,b,w) \in E_W \\ a=i \text{ or } b=i}} x_{a,b,w,p} \leq 2, 
+        \quad \forall i \in T, \; \forall p \in P.
+    \end{equation}
+    Each team can appear in the same period at most twice over the entire tournament.
+
+    \item \textbf{Team-week participation:}
+    \begin{equation}
+        \sum_{\substack{(a,b,ww)\in E_W \\ ww=w, \, (a=i \text{ or } b=i)}}
+        \sum_{p=1}^{n/2} x_{a,b,ww,p} = 1, 
+        \quad \forall i \in T, \; \forall w \in W.
+    \end{equation}
+    Guarantees that every team plays exactly one match per week.
+\end{enumerate}
+
+\paragraph{Implied constraints.}
+Some constraints are structurally implied by the round-robin construction:
+\begin{itemize}
+    \item Each team faces every other team exactly once, as guaranteed by the generated match set $E_W$.
+    \item Each week automatically contains $n/2$ matches, implying a total of $n(n-1)/2$ games.
+\end{itemize}
+These properties make additional uniqueness constraints unnecessary and improve solver efficiency.
+
+
+\paragraph{Symmetry breaking constraints.}
+
+The model exhibits symmetry since multiple equivalent schedules exist due to:
+\begin{itemize}
+    \item permutation of weeks and periods;
+    \item global inversion of all home/away assignments.
+\end{itemize}
+
+To eliminate such redundancies:
+\begin{itemize}
+    \item In Stage~A, we fix the first week's match--period mapping:
+    \[
+    x_{i,j,1,p} = 1 \text{ for the } p\text{-th match of week 1.}
+    \]
+    \item In Stage~B, we fix the home orientation of one match:
+    \[
+    s_{i,j,1} = 1 \text{ for the first match of week 1.}
+    \]
+\end{itemize}
+These symmetry-breaking constraints drastically reduce the number of equivalent solutions and improve solver convergence.
 
 \subsection{Validation}
 
-See Section~2.4. Bonus points will be considered if a solver-independent language (e.g., AMPL) is employed so as to play with different MIP solvers on the same model.
+The model was implemented in \texttt{Pyomo}, a Python-based algebraic modeling language, and validated using the \texttt{HiGHS} and \texttt{CBC} solvers.
+
+The validation procedure included:
+\begin{itemize}
+    \item Running both stages sequentially within a total time limit of 300 seconds, split between Stage~A and Stage~B.
+    \item Comparing configurations with and without:
+    \begin{itemize}
+        \item warm-start initialization (greedy constructive heuristic),
+        \item symmetry-breaking constraints.
+    \end{itemize}
+\end{itemize}
+
+Empirical results confirmed that:
+\begin{itemize}
+    \item Symmetry breaking significantly reduced solver times, especially for $n \geq 10$.
+    \item Warm-start initialization provided high-quality feasible starting points, improving stability.
+    \item The two-stage decomposition allowed the model to scale up to $n = 14$ within the 300-second limit.
+\end{itemize}
+
+Both stages consistently produced valid tournament schedules satisfying all structural constraints, with home/away deviations typically within one game per team, confirming both feasibility and fairness of the approach.
 
 \section{Conclusions}
 
 Write down briefly your concluding remarks.
 
-\section*{Authenticity and Author Contribution Statement}
+\section{Authenticity and Author Contribution Statement}
 
 Declare that the described work is your own and that you did not copy it from someone else. The report should cite properly any idea taken from any person or resource.
 
