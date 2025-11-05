@@ -27,75 +27,110 @@ You do not need to introduce the problem, nor the optimization methods that you 
 
 \section{CP Model}
 
-We provide two MiniZinc models for the Sports Tournament Scheduling (STS) problem:
-a \emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization} model (\texttt{sts\_opt.mzn}).
-Both use the canonical index sets
-$\text{Teams}=\{1,\dots,n\}$ (with $n$ even), $\text{Weeks}=\{1,\dots,n-1\}$,
-$\text{Periods}=\{1,\dots,n/2\}$.
-The decision model additionally restricts $n$ to $(n=2)\vee(n>5)$ due to the period–load cap ($\le 2$), which makes $n=4$ infeasible.
+For the Sports Tournament Scheduling problem, we provide two MiniZinc models: a \emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization} model (\texttt{sts\_opt.mzn}).
+
+Both models use the index sets \text{(with $n$ even)}:
+\[
+\text{Teams}=\{1,\dots,n\}\,\qquad
+\text{Weeks}=\{1,\dots,n-1\},\qquad
+\text{Periods}=\{1,\dots,n/2\}.
+\]
+Additionally, due to the period–load cap ($\le 2$), the decision model restricts $n$ to $(n=2)\vee(n>5)$, which makes $n=4$ not admissible.
+
+\medskip
+\noindent\emph{Notation.} We use Iverson brackets $[\,\cdot\,]$ to denote Boolean-to-integer casts (1 if the condition holds, 0 otherwise).
 
 \subsection{Decision variables}
-\paragraph{Common notation and index cleanup (rectangular arrays).}
-We keep arrays over rectangular index sets and disable meaningless cells by fixing them to constants.
-In particular, we only model unordered pairs and forbid $i\ge j$ by setting $Z[w,p,i,j]=0$;
-in the optimization model we also set $B[i,j]=0$ and $W[i,j]=1$ for $i\ge j$.
-This preserves rectangular arrays while removing free variables.
 
 \paragraph{Decision model (\texttt{sts\_decision.mzn}).}
 \begin{itemize}
-  \item \textbf{Slot--pair assignment.}
-  $Z_{w,p,i,j}\in\{0,1\}$ for $w\in\text{Weeks}$, $p\in\text{Periods}$, $1\le i<j\le n$.
-  Semantics: $Z_{w,p,i,j}=1$ iff slot $(w,p)$ hosts the unordered pair $\{i,j\}$.
-  \item \textbf{Team--slot occupancy.}
-  $U_{w,p,t}\in\{0,1\}$ for $w\in\text{Weeks}$, $p\in\text{Periods}$, $t\in\text{Teams}$.
-  Semantics: $U_{w,p,t}=1$ iff team $t$ plays in slot $(w,p)$ (either side).
-  \item \textbf{Output view (home/away).}
-  $H_{p,w},A_{p,w}\in\text{Teams}$.
-  Semantics: values exposed to the checker; in the decision model they are
-  \emph{canonically derived} from $Z$ by $H_{p,w}=\min\{i,j\}$,
-  $A_{p,w}=\max\{i,j\}$ for the unique $(i<j)$ with $Z_{w,p,i,j}=1$.
+  \item \textbf{Slot–pair assignment ($Z$).}
+  We use $Z_{w,p,i,j}\in\{0,1\}$ to indicate whether the unordered pair $\{i,j\}$ (with $i<j$) is scheduled in week $w$ and period $p$. This is the authoritative placement view: all other views of the schedule are derived from $Z$. Keeping $Z$ as the primary source of truth lets us express slot capacity and pair uniqueness as simple sums (detailed later in the constraints), which in turn provides strong propagation.
+
+  \item \textbf{Team–slot occupancy ($U$).}
+  We keep $U_{w,p,t}\in\{0,1\}$ to mark whether team $t$ participates in slot $(w,p)$. Although $U$ is derivable from $Z$, making it explicit is useful because it allows us to write “each team plays exactly once per week” and per–period usage directly in a counting form. The link to $Z$ is a "channel":
+  \[
+  U_{w,p,t} \;=\; \sum_{j>t} Z_{w,p,t,j} \;+\; \sum_{i<t} Z_{w,p,i,t},
+  \]
+  meaning that team $t$ occupies slot $(w,p)$ iff the slot contains either $(t,j)$ with $t<j$ or $(i,t)$ with $i<t$.
+
+  \item \textbf{Output view ($H,A$).}
+  The matrices $H_{p,w}, A_{p,w}\in\text{Teams}$ expose the solution in the exact format required by the checker (home team, away team for each period–week). In the \emph{decision} model, we fix the orientation canonically to eliminate the global home/away flip symmetry: the lower team id is home and the higher id is away. This is channeled from $Z$ without disjunctions:
+  \[
+  H_{p,w} \;=\; \sum_{i<j} Z_{w,p,i,j}\cdot i,
+  \qquad
+  A_{p,w} \;=\; \sum_{i<j} Z_{w,p,i,j}\cdot j.
+  \]
+  Consequently, each occupied slot $(w,p)$ contributes exactly one pair $\{i,j\}$ and therefore exactly one pair $(H_{p,w},A_{p,w})$.
 \end{itemize}
 
 \paragraph{Optimization model (\texttt{sts\_opt.mzn}).}
+The optimization model retains $Z$, $U$, $H$, and $A$ as above, and adds variables that make week assignment, orientation, and period profiles explicit. These dual or aggregated views strengthen propagation and support the fairness objective.
+
 \begin{itemize}
-  \item \textbf{Same $Z$ and $U$} as above, with the same domains and meaning.
-  \item \textbf{Week of each pair (dual viewpoint).}
-  $W_{i,j}\in\text{Weeks}$ for $1\le i<j\le n$.
-  Semantics: week in which the pair $\{i,j\}$ is played.
-  \item \textbf{Orientation (home/away) of each pair.}
-  $B_{i,j}\in\{0,1\}$ for $i<j$.
-  Semantics: $B_{i,j}=1\Rightarrow i$ is home vs.\ $j$; otherwise $j$ is home vs.\ $i$.
-  \item \textbf{Exact period--usage profile.}
-  $C_{t,p}\in\{1,2\}$ for $t\in\text{Teams}$, $p\in\text{Periods}$.
-  Semantics: number of appearances of team $t$ in period $p$ across the season.
-  \item \textbf{Output view (home/away).}
-  $H_{p,w},A_{p,w}\in\text{Teams}$.
-  Semantics: values exposed to the checker, \emph{derived} from $(Z,B)$ without disjunctions.
-  \item \textbf{Home counts and deviation.}
-  $Hc_t\in\{0,\dots,n-1\}$ for $t\in\text{Teams}$ (home matches of $t$);
-  $\text{dev}_t\in\{1,\dots,n-1\}$ (absolute imbalance of $t$).
-  \item \textbf{Objective.}
-  $\text{obj}\in\{0,\dots,n(n-1)\}$ with $\text{obj}=\sum_{t} \text{dev}_t$.
+  \item \textbf{Week of each pair ($W$).}
+  For every unordered pair we keep $W_{i,j}\in\text{Weeks}$ with $i<j$. This variable expresses the mapping “pair $\to$ week” and is tightly linked to $Z$ by a bidirectional channel:
+  \[
+  [\,W_{i,j}=w\,] \;=\; \sum_{p\in\text{Periods}} Z_{w,p,i,j}\quad \forall\,w\in\text{Weeks},
+  \]
+  which is equivalent to saying that choosing $W_{i,j}=w$ places $\{i,j\}$ in exactly one period during week $w$. This dual view enables compact team-wise constraints (e.g., all weeks incident to a team are \texttt{alldifferent}) and provides a strong first search phase.
+
+  \item \textbf{Orientation of each pair ($B$).}
+  We define $B_{i,j}\in\{0,1\}$ for $i<j$: by convention $B_{i,j}=1$ means $i$ plays at home against $j$; otherwise $j$ plays at home against $i$. Orientation is reflected in the output by channeling $B$ together with $Z$; at the unique slot $(w,p)$ where $Z_{w,p,i,j}=1$ we set
+  \[
+  \begin{aligned}
+  H_{p,w} &= i\cdot B_{i,j} + j\cdot (1 - B_{i,j}),\\
+  A_{p,w} &= j\cdot B_{i,j} + i\cdot (1 - B_{i,j}),
+  \end{aligned}
+  \]
+  and implement this for all slots at once via linear expressions weighted by $Z$. Keeping $B$ explicit allows us to compute fairness and apply symmetry breaking on a fixed reference week.
+
+  \item \textbf{Exact period–usage profile ($C$).}
+  The variable $C_{t,p}\in\{1,2\}$ counts how many times team $t$ uses period $p$ over the season. It is defined by summing occupancy across weeks,
+  \[
+  C_{t,p} \;=\; \sum_{w\in\text{Weeks}} U_{w,p,t},
+  \]
+  but stating $C$ explicitly helps the solver enforce the intended profile (one period used once, all other periods used twice) with stronger filtering than a simple “$\le 2$” bound.
+
+  \item \textbf{Home counts and deviation ($Hc$, $\mathrm{dev}$).}
+  For each team we compute the total number of home matches
+  \[
+  Hc_t \;=\; \sum_{j>t} B_{t,j} \;+\; \sum_{i<t} (1 - B_{i,t}),
+  \]
+  which depends only on pair-level orientations $B$. The absolute deviation from the ideal split is linearized with the standard pair of inequalities:
+  \[
+  \mathrm{dev}_t \;\ge\; 2\,Hc_t - (n-1),\qquad
+  \mathrm{dev}_t \;\ge\; -(2\,Hc_t - (n-1)).
+  \]
+  These variables serve as summary views that exist to make the objective explicit and solver-friendly.
+
+  \item \textbf{Objective accumulator ($\mathrm{obj}$).}
+  We keep $\mathrm{obj}\in\mathbb{Z}_{\ge 0}$ as the aggregator of team-wise deviations:
+  \[
+  \mathrm{obj} \;=\; \sum_{t\in\text{Teams}} \mathrm{dev}_t.
+  \]
 \end{itemize}
 
 \subsection{Objective function}
-The decision model is a pure feasibility formulation (\texttt{solve satisfy}).
 
-The optimization model minimizes the global home/away imbalance:
+The decision model is a pure feasibility formulation (\texttt{solve satisfy}).  
+The optimization model minimizes the global home/away imbalance,
 \[
-\min\ \text{obj}=\sum_{t\in\text{Teams}}\text{dev}_t,
+\min\ \mathrm{obj},
 \]
-where the home count is computed as
+where $\mathrm{obj}$, $Hc_t$, and $\mathrm{dev}_t$ are exactly as defined in the decision-variables section.
+
+We also post the global equality
 \[
-Hc_t=\sum_{j>t} B_{t,j}+\sum_{i<t} (1-B_{i,t}),
+\sum_{t\in\text{Teams}} Hc_t \;=\; \frac{n(n-1)}{2},
 \]
-and the absolute deviation is linearized via
+i.e., total home games equal the total number of matches. While redundant, this constraint lets the solver tighten domains early: as soon as some orientations (the $B$ variables) fix parts of the $Hc_t$, the equality restricts the remaining $Hc$ ranges; if the residual minimum/maximum cannot meet the required total, the branch fails immediately.
+
+For admissible instances (even $n$), we further add the following objective bounds as pruning cuts:
 \[
-\text{dev}_t\ \ge\ 2Hc_t-(n-1),\qquad
-\text{dev}_t\ \ge\ -(2Hc_t-(n-1)).
+n \;\le\; \mathrm{obj} \;\le\; 2n \,
 \]
-We also add the redundant global equality $\sum_t Hc_t = \frac{n(n-1)}{2}$ (total homes equals the number of matches),
-and bound the objective as $n\le \text{obj}\le 2n$ (even $n$), which prunes clearly suboptimal branches without forcing feasibility-at-optimum.
+The lower bound follows from parity: each team plays $n\!-\!1$ matches (odd), hence $\mathrm{dev}_t\ge 1$ for all $t$, and therefore $\mathrm{obj}\ge n$. The upper bound reflects our observed schedules (in our runs $\mathrm{dev}_t\le 2$ for all teams), and we use $\mathrm{obj}\le 2n$ as a safe redundant cut for the tested instances. This bound is not required for correctness and can be disabled without affecting feasibility or optimality guarantees.
 
 \subsection{Constraints}
 
