@@ -124,58 +124,130 @@ We also post the global equality
 \[
 \sum_{t\in\text{Teams}} Hc_t \;=\; \frac{n(n-1)}{2},
 \]
-i.e., total home games equal the total number of matches. While redundant, this constraint lets the solver tighten domains early: as soon as some orientations (the $B$ variables) fix parts of the $Hc_t$, the equality restricts the remaining $Hc$ ranges; if the residual minimum/maximum cannot meet the required total, the branch fails immediately.
+i.e., total home games equal the total number of matches. While redundant, this constraint lets the solver tighten domains early.
 
 For admissible instances (even $n$), we further add the following objective bounds as pruning cuts:
 \[
 n \;\le\; \mathrm{obj} \;\le\; 2n \,
 \]
-The lower bound follows from parity: each team plays $n\!-\!1$ matches (odd), hence $\mathrm{dev}_t\ge 1$ for all $t$, and therefore $\mathrm{obj}\ge n$. The upper bound reflects our observed schedules (in our runs $\mathrm{dev}_t\le 2$ for all teams), and we use $\mathrm{obj}\le 2n$ as a safe redundant cut for the tested instances. This bound is not required for correctness and can be disabled without affecting feasibility or optimality guarantees.
+The lower bound follows from parity: each team plays $n\!-\!1$ matches (odd), hence $\mathrm{dev}_t\ge 1$ for all $t$, and therefore $\mathrm{obj}\ge n$.
 
 \subsection{Constraints}
 
-\paragraph{Main problem constraints.}
-\begin{align*}
-&\textbf{(one match per slot)} && \forall w\in\text{Weeks},\ \forall p\in\text{Periods}:
-&& \sum_{1\le i<j\le n} Z_{w,p,i,j} = 1.\\[4pt]
-&\textbf{(each pair once)} && \forall\,1\le i<j\le n:
-&& \sum_{w\in\text{Weeks}}\sum_{p\in\text{Periods}} Z_{w,p,i,j}=1.\\[4pt]
-&\textbf{(weekly participation)} && \forall w\in\text{Weeks},\ \forall t\in\text{Teams}:
-&& \sum_{p\in\text{Periods}} U_{w,p,t} = 1.\\[4pt]
-&\textbf{(period load cap)} && \forall t\in\text{Teams},\ \forall p\in\text{Periods}:
-&& \sum_{w\in\text{Weeks}} U_{w,p,t}\ \le\ 2.\\[6pt]
-&\textbf{(channeling $U\!\leftrightarrow\! Z$)} && \forall w,p,t:
-&& U_{w,p,t}=\sum_{j>t} Z_{w,p,t,j}+\sum_{i<t} Z_{w,p,i,t}.
-\end{align*}
+Here, we summarize the constraints that both models employ. We make it clear when a constraint is optimization-only. The channels and variables listed below are all specified in the Decision-variables subsection.
+\paragraph{Core scheduling constraints (both models).}
+These constraints, which are written against the authoritative placement view $Z$ and the occupancy view $U$, encode the mathematical properties of a round-robin season.
 
-\paragraph{Optimization-specific constraints (dual viewpoint and globals).}
-We use $\mathbf{1}[\cdot]$ for indicator functions ($1$ if the predicate holds, $0$ otherwise).
-\begin{align*}
-&\textbf{(channeling $W\!\leftrightarrow\! Z$)} && \forall i<j:\quad \sum_{w} \mathbf{1}[W_{i,j}=w]=1,
-\qquad \forall w:\ \mathbf{1}[W_{i,j}=w]=\sum_{p} Z_{w,p,i,j}.\\[4pt]
-&\textbf{(alldifferent on weeks per team)} && \forall t\in\text{Teams}:\quad
-\texttt{alldifferent}\Big(\,[W_{\min(t,j),\max(t,j)}\mid j\neq t]\,\Big).\\[4pt]
-&\textbf{(output construction $Z,B\!\Rightarrow\!(H,A)$)} && \forall w,p:
-&& \text{$H_{p,w}$ and $A_{p,w}$ are selected from the unique $\{i,j\}$ in $(w,p)$ according to $B_{i,j}$.}
-\end{align*}
+\noindent\textbf{One match per slot.}
+\[
+\forall\,w\in\text{Weeks},\ \forall\,p\in\text{Periods}:\quad 
+\sum_{1\le i<j\le n} Z_{w,p,i,j} = 1.
+\]
 
-\paragraph{Implied constraints.}
-\begin{align*}
-&\textbf{(exact period profile)} && \forall t,p:\quad C_{t,p}=\sum_{w} U_{w,p,t},\quad C_{t,p}\in\{1,2\},\\
-&&& \forall t:\quad \sum_{p} C_{t,p}=n-1,\quad \sum_{p} \mathbf{1}[C_{t,p}=1]=1.
-\end{align*}
-Rationale: with $P=n/2$ periods and the cap $\sum_w U_{w,p,t}\le 2$, arithmetic implies that each team uses exactly one period once and all others twice; encoding this profile strengthens propagation compared to a plain ``$\le 2$'' bound.
-We also keep the redundant equality $\sum_t Hc_t = \frac{n(n-1)}{2}$ (already mentioned in the objective section) to aid propagation.
+\noindent\textbf{Each pair exactly once.}
+\[
+\forall\,1\le i<j\le n:\quad 
+\sum_{w\in\text{Weeks}}\sum_{p\in\text{Periods}} Z_{w,p,i,j} = 1.
+\]
 
-\paragraph{Symmetry breaking constraints.}
+\noindent\textbf{Weekly participation (exactly once).}
+\[
+\forall\,w\in\text{Weeks},\ \forall\,t\in\text{Teams}:\quad 
+\sum_{p\in\text{Periods}} U_{w,p,t} = 1.
+\]
+
+
+\paragraph{Period-usage constraints.}
+According to the task, a team must play during the same period no more than twice during the season. In the two models, we enforce this differently:
 \begin{itemize}
-  \item \textbf{Week 1 canonical pairing (both models):}
-  fix Week~1 to $(1,2),(3,4),\dots,(n-1,n)$ by $Z_{1,p,2p-1,2p}=\texttt{true}$ for all $p$.
-  \item \textbf{Week 1 orientation (optimization model):}
-  set $B_{2p-1,2p}=\texttt{true}$ for all $p$, i.e., the odd-indexed team is home in Week~1.
-  \item \textbf{Canonical home/away in the decision model:}
-  $H=\min,\,A=\max$ in every slot removes the global flip symmetry.
+  \item \emph{Decision model: at-most-two bound.}
+  \[
+  \forall\,t\in\text{Teams},\ \forall\,p\in\text{Periods}:\quad 
+  \sum_{w\in\text{Weeks}} U_{w,p,t} \ \le\ 2.
+  \]
+  \item \emph{Optimization model: exact profile (redundant but stronger).}
+  We define $C_{t,p}=\sum_{w} U_{w,p,t}$ and constrain $C_{t,p}\in\{1,2\}$ with the season-level equalities
+  \[
+  \forall\,t:\quad \sum_{p} C_{t,p}=n-1,\qquad 
+  \sum_{p} \mathbf{1}\!\left[C_{t,p}=1\right]=1,
+  \]
+  i.e., for each team exactly one period is used once and all remaining periods are used twice. This replaces the loose “$\le 2$” with a precise profile that propagates more aggressively.
 \end{itemize}
+
+\paragraph{Channeling constraints (consistency between views).}
+These equalities keep all views of the schedule synchronized.
+
+\noindent\textbf{$U \leftrightarrow Z$ (occupancy from placement).}
+\[
+\forall\,w,p,t:\quad 
+U_{w,p,t} = \sum_{j>t} Z_{w,p,t,j} \;+\; \sum_{i<t} Z_{w,p,i,t}.
+\]
+This states that team $t$ occupies slot $(w,p)$ iff the slot hosts either $(t,j)$ with $t<j$ or $(i,t)$ with $i<t$.
+
+\noindent\textbf{$W \leftrightarrow Z$ (pair-to-week, optimization model).}
+\[
+\forall\,i<j,\ \forall\,w\in\text{Weeks}:\quad 
+\mathbf{1}[W_{i,j}=w] \;=\; \sum_{p\in\text{Periods}} Z_{w,p,i,j}.
+\]
+Equivalently, each pair chooses exactly one week and is placed in one period of that week.
+
+\noindent\textbf{Output construction.}
+\[
+\text{Decision model:}\quad 
+H_{p,w} = \sum_{i<j} Z_{w,p,i,j}\, i,\qquad 
+A_{p,w} = \sum_{i<j} Z_{w,p,i,j}\, j.
+\]
+\[
+\text{Optimization model (orientation-aware):}\quad 
+H_{p,w} = i\,B_{i,j} + j\,(1-B_{i,j}),\quad 
+A_{p,w} = j\,B_{i,j} + i\,(1-B_{i,j}),
+\]
+for the unique $(i<j)$ such that $Z_{w,p,i,j}=1$.
+
+\paragraph{Team-wise structure via globals (optimization model).}
+Using $W$ we rule out double-booking of a team across weeks with a single global:
+\[
+\forall\,t\in\text{Teams}:\quad 
+\texttt{alldifferent}\Big(\, W_{\min(t,j),\,\max(t,j)} \ \big|\ j\neq t \,\Big).
+\]
+The $n\!-\!1$ weeks incident to team $t$ must be pairwise distinct. This is redundant w.r.t.\ the weekly-participation constraint on $U$, but typically propagates earlier because it acts directly on week choices.
+
+\paragraph{Index hygiene (rectangular arrays).}
+We keep rectangular arrays but deactivate meaningless cells to avoid free variables:
+\[
+\forall\,w,p:\ \forall\,i\ge j:\ Z_{w,p,i,j}=0 \quad\text{(both models)};
+\qquad
+\forall\,i\ge j:\ B_{i,j}=0,\ \ W_{i,j}=1 \quad\text{(optimization model)}.
+\]
+These fixed values are never iterated over by constraints (which use $i<j$), but simplify search annotations.
+
+\paragraph{Implied (redundant) constraints and rationale.}
+The following constraints are \emph{logically implied} by the model semantics but are posted to strengthen propagation and prune search earlier:
+\begin{itemize}
+  \item \textbf{Exact period profile (per team).}  
+  Given $\sum_{p,w} U_{w,p,t}=n-1$ and $\sum_{w} U_{w,p,t}\le 2$, the only feasible distribution across $p\in\text{Periods}$ is “one period used once and all others twice”. Encoding it via $C_{t,p}$ (see above) makes this implied structure explicit and more easily exploitable by the solver.
+  \item \textbf{Global home-count balance.}  
+  Since every match contributes exactly one home, we have
+  \[
+  \sum_{t\in\text{Teams}} Hc_t \;=\; \frac{n(n-1)}{2}.
+  \]
+  Posting this equality synchronizes the per-team counters: once some $B$ variables are fixed, the remaining $Hc$ domains shrink accordingly.
+  \item \textbf{Objective lower bound (even $n$).}  
+  Because each team plays $n-1$ (odd) matches, $\mathrm{dev}_t\ge 1$ for all $t$, hence
+  \[
+  \mathrm{obj} \;\ge\; n.
+  \]
+  We keep this bound explicitly to cut branches that cannot beat the incumbent even before full orientation is decided.
+  \item \textbf{Week-wise distinctness (alternative view).}  
+  The \texttt{alldifferent} on the $W$ variables of a fixed team is logically equivalent to “exactly once per week” for that team; we post it (in the optimization model) because its global propagator is stronger and acts earlier.
+\end{itemize}
+
+\paragraph{Additional pruning cuts (not implied).}
+For the tested instances (even $n$) we also post the safe upper bound
+\[
+\mathrm{obj} \;\le\; 2n,
+\]
+reflecting that schedules with per-team deviation at most $2$ were sufficient in our runs. This cut is optional: removing it does not affect correctness but may slow down search.
 
 \subsection{Validation}
 
