@@ -289,6 +289,119 @@ For example, ``The results obtained using the search strategy $h$ are reported i
     \label{tab:results}
 \end{table}
 
+\subsection{SAT Model (decision \& optimization)}
+
+We encode STS in propositional CNF using two families of literals. The solver interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export $\rightarrow$ MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from CNF generation (when applicable), and results are written under \texttt{res/SAT/\#}.json in the format required by the project (\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
+
+\paragraph{Indexing.}
+Let $n$ be even. We use \emph{Teams} $=\{1,\dots,n\}$, \emph{Weeks} $=\{1,\dots,n-1\}$, and \emph{Periods} $=\{1,\dots,n/2\}$. A schedule is an $(n/2)\times(n-1)$ matrix whose entry $(p,w)$ holds exactly one oriented match $(i,j)$ with $i$ at home and $j$ away.
+
+\subsubsection*{Decision variables (literals)}
+\begin{itemize}
+\item \textbf{Placement with orientation} $X_{i,j,w,p}$ (Boolean): true iff the match ``$i$ vs.\ $j$'' is played in week $w$, period $p$, with $i$ at home (ordered pair, $i\ne j$). This is the authoritative view of the schedule.
+\item \textbf{Slot occupancy} $Y_{t,w,p}$ (Boolean): true iff team $t$ occupies slot $(w,p)$. These literals are channeled to $X$ locally (one opponent per team per week).
+\end{itemize}
+
+\paragraph{Cardinality encodings.}
+We generate CNF for AtMost/ExactlyOne using adaptive encodings: pairwise for $\text{AtMost}(k\!=\!1)$ on small scopes, ladder otherwise; for larger scopes we optionally use \texttt{cardnetwrk}; sequential counters are the default fall-back. This balances clause/auxiliary-variable overhead and propagation strength.
+
+\subsubsection*{Constraints (decision model)}
+All constraints are posted in CNF against $X$ and $Y$.
+
+\paragraph{Week assignment by circle method (global pruning).}
+We pre-fix the \emph{week} of every unordered pair $\{u,v\}$ by the classical circle construction, then ban all other weeks with unit negatives; within the assigned week we enforce \textsf{ExactlyOne} over all $(w^\star,p)$ and both orientations $(u,v)/(v,u)$:
+\[
+\sum_{p} \bigl( X_{u,v,w^\star,p} + X_{v,u,w^\star,p} \bigr) = 1,\qquad
+X_{u,v,w,p}=X_{v,u,w,p}=0\ \ (\forall w\ne w^\star).
+\]
+This removes week permutations while keeping at least one feasible schedule.
+
+\paragraph{Channeling $X\leftrightarrow Y$ (one opponent per week).}
+Let $o(t,w)$ be the unique opponent of $t$ in week $w$ induced by the circle method. For each $(t,w,p)$:
+\[
+\bigl(X_{t,o,w,p}\!\!\rightarrow\! Y_{t,w,p}\bigr)\ \wedge\ \bigl(X_{o,t,w,p}\!\!\rightarrow\! Y_{t,w,p}\bigr)\ \wedge\ \bigl(Y_{t,w,p}\!\!\rightarrow\! (X_{t,o,w,p}\vee X_{o,t,w,p})\bigr).
+\]
+These are 2–3 literal clauses, hence cheap and strong.
+
+\paragraph{Exactly one period per team per week.}
+For each $(t,w)$ we post \textsf{ExactlyOne}$\{Y_{t,w,p}\}_{p}$, which implies “one match per team per week” once combined with channeling.
+
+\paragraph{Exactly two teams per slot.}
+For each $(w,p)$ we enforce $\sum_t Y_{t,w,p}=2$ via AtMost2 and its dual (AtLeast2 encoded as AtMost on negated literals). This realizes “one match per slot.”
+
+\paragraph{Period load cap.}
+For each team $t$ and period $p$, $\sum_w Y_{t,w,p}\le 2$.
+
+\paragraph{Extra symmetry breaking (toggle).}
+When enabled, week~1 is fixed at period granularity (pair $\,(i,n\!+\!1\!-\!i)\,$ plays in period $i$) and the match $(1,n)$ is oriented as home for team 1 in $(w,p)=(1,1)$. This removes residual week/period symmetries. We provide both ``SB'' and ``no~SB'' variants in experiments.
+
+\subsubsection*{Optimization in SAT (fairness)}
+We minimize the maximum home/away imbalance
+\[
+d^\star \;=\; \min\, d \quad\text{s.t.}\quad \Big\lceil \tfrac{T-d}{2} \Big\rceil \ \le\ \text{home}_i\ \le\ \Big\lfloor \tfrac{T+d}{2} \Big\rfloor\quad\forall i,
+\]
+where $T=n\!-\!1$ and $\text{home}_i=\sum_{j\ne i,w,p} X_{i,j,w,p}$. We solve this by \emph{incremental} SAT on $d=1,2,\dots,T$ (parity gives $d\ge 1$): for a fixed $d$ we add team-wise upper/lower cardinality constraints on the \emph{home} literals of each team and test satisfiability. The first satisfiable $d$ is optimal. For Z3 we push/pop AtMost/AtLeast constraints; for PySAT we export the base CNF once and then call the solver with the extra fairness clauses.
+
+\subsubsection*{Solvers and interfaces}
+\textbf{Z3.} We declare Boolean atoms $v_1,\dots,v_{V}$ and post each CNF clause as a Z3 disjunction; the $300$s limit is passed as a per-call timeout in milliseconds.
+\textbf{PySAT backends.} We export CNF to DIMACS (\texttt{pysat.formula.CNF.to\_file}) and run the selected solver with a hard timeout using \texttt{solve\_limited} plus a watchdog \texttt{interrupt}; for optimization we reuse the same DIMACS and add per-$d$ fairness clauses. All solvers are used sequentially, as required.
+
+\subsubsection*{Solution format and JSON writing}
+A satisfying assignment is decoded into an $(n/2)\times(n-1)$ matrix of pairs \texttt{[home, away]} by scanning the true $X$ literals. Each run is appended as a new key in \texttt{res/SAT/\#}.json (no overwrites), with time normalized to \texttt{min(actual, 300)} and \texttt{optimal} set according to the decision/optimization semantics.
+
+\paragraph{Why these modelling choices?}
+Symmetry breaking and encoding selection strongly affect SAT performance; we deliberately (i) fix a canonical week assignment via the circle method, (ii) keep local $X\!\leftrightarrow\!Y$ channels to obtain short clauses, and (iii) adapt cardinality encodings to scope/threshold. These are in line with evidence that modelling dominates runtime in highly symmetric timetabling problems.
+
+\subsubsection*{Validation setup}
+We follow the project rules: $300$s global limit including any pre-solving/printing; solvers run on a single core; and Z3 is mandatory while PySAT+DIMACS enables solver-independence (bonus). We report decision runtimes and, for optimization, the (best) objective value found within the limit; unsolved cases are marked with time $=300$ and \texttt{optimal=false}.
+
+\subsubsection*{Experimental results (our runs)}
+Tables~\ref{tab:sat-decision}--\ref{tab:sat-optim} summarize the measured runtimes (seconds) for $n\in\{16,18\}$ on Z3, MiniSAT\,22, and Glucose\,3, with/without extra symmetry breaking (``SB''). ``300'' denotes a timeout per the rules; a checkmark indicates that a model was found (decision) or an optimal $d$ was proven (optimization).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{Z3} & \multicolumn{2}{c}{MiniSAT\,22} & \multicolumn{2}{c}{Glucose\,3} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Instance & SB & no SB & SB & no SB & SB & no SB \\
+\midrule
+$n=16$ & \textbf{7}\,(\checkmark) & \textbf{6}\,(\checkmark) & 78\,(\checkmark) & \textbf{4}\,(\checkmark) & 300 & 83\,(\checkmark) \\
+$n=18$ & 34\,(\checkmark) & 90\,(\checkmark) & 300 & 300 & 300 & 300 \\
+\bottomrule
+\end{tabular}
+\caption{Decision SAT: runtime (s) and solved status.}
+\label{tab:sat-decision}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{Z3} & \multicolumn{2}{c}{MiniSAT\,22} & \multicolumn{2}{c}{Glucose\,3} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+Instance & SB & no SB & SB & no SB & SB & no SB \\
+\midrule
+$n=16$ & 66\,(\checkmark) & \textbf{18}\,(\checkmark) & 177\,(\checkmark) & \textbf{6}\,(\checkmark) & 300 & 300 \\
+$n=18$ & 107\,(\checkmark) & 300 & 300 & 300 & 300 & 300 \\
+\bottomrule
+\end{tabular}
+\caption{Optimization SAT: runtime (s) and solved status. (The objective $d$ is minimized; values are available in the corresponding \texttt{.json} files.)}
+\label{tab:sat-optim}
+\end{table}
+
+\noindent
+\textbf{Observations.} (i) For $n=16$, PySAT with no SB is extremely fast (MiniSAT\,22 in $4$–$6$s), while Glucose\,3 still times out on the optimization variant; (ii) for $n=18$ only Z3 solved both decision and optimization within the limit; (iii) enabling the extra week-1 symmetry sometimes \emph{hurts} CDCL (e.g., MiniSAT\,22 at $n=16$), consistent with known interactions between SB clauses and branching heuristics.
+
+\subsubsection*{Reproducibility and outputs}
+Each approach/run is saved as a distinct key (no overwrite) in \texttt{res/SAT/\#}.json; the $(n/2)\times(n-1)$ \texttt{sol} matrix is reconstructed from true $X$ atoms. Time accounting includes DIMACS generation for PySAT runs, and all unsolved runs are normalized to \texttt{time=300} with \texttt{optimal=false}, exactly as prescribed.
+
+\subsubsection*{Limitations and future work}
+The circle-method week fixing is a strong SB that discards alternative week assignments; exploring weaker SBs or dynamic SB learning may further help CDCL solvers. Also, swapping AtMost encodings per scope/threshold already paid off; a systematic sensitivity study of encodings vs.\ solver/instance size would align with best practices in SAT modelling.
+
+
 \section{SAT Model}
 
 This part is mandatory for groups of 4 students. Groups up to 3 students can choose between SAT and SMT, and will be given bonus points if they do both.

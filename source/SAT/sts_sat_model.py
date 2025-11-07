@@ -1,4 +1,4 @@
-# sts_sat_model.py — pure SAT model
+# sts_sat_model.py
 
 from typing import Dict, List, Tuple
 from pysat.formula import IDPool
@@ -18,8 +18,8 @@ def _enc_for_atmost(m: int, k: int) -> 'EncType':
     if k == 1:
         if m <= 8:
             return EncType.pairwise
-        return EncType.heule if _has_enc('heule') else EncType.ladder
-    if _has_enc('cardnetwrk') and m >= 24:
+        return EncType.ladder
+    if _has_enc('cardnetwrk') and m >= 15:
         return EncType.cardnetwrk
     return EncType.seqcounter
 
@@ -36,13 +36,13 @@ def _exactly_one(lits: List[int], pool: IDPool) -> List[List[int]]:
     return cls
 
 # -----------------------------
-#  Symmetry: round-robin "circle"
+#  Symmetry breaking
 # -----------------------------
 def _circle_pairs_by_week(n: int) -> List[List[Tuple[int, int]]]:
     """Returns for each week (1..n-1) the list of n/2 pairs (u<v)."""
     arr = list(range(1, n + 1))
     weeks_pairs: List[List[Tuple[int, int]]] = []
-    for _ in range(n - 1):
+    for _ in range(n - 1): # weeks
         pairs = []
         for i in range(n // 2):
             u, v = arr[i], arr[-(i + 1)]  # First and last elements towards center
@@ -55,10 +55,11 @@ def _circle_pairs_by_week(n: int) -> List[List[Tuple[int, int]]]:
     return weeks_pairs
 
 def _fix_week1_periods(n: int, pool: IDPool, clauses: List[List[int]]):
-    """Week 1: (i, n+1-i) plays in period i (free orientation) + fix (1,n) at home in p=1."""
+    """Week 1: (i, n+1-i) plays in period i + fix (1,n) at home in p=1."""
     w = 1
-    for i in range(1, n // 2 + 1):
-        j, p = n + 1 - i, i
+    for i in range(1, n // 2 + 1): # periods
+        j = n + 1 - i
+        p = i
         x_ij = pool.id(("X", i, j, w, p))
         x_ji = pool.id(("X", j, i, w, p))
         # needs to play in that period (one of the two orientations)
@@ -68,13 +69,20 @@ def _fix_week1_periods(n: int, pool: IDPool, clauses: List[List[int]]):
             if pp != p:
                 clauses.append([-pool.id(("X", i, j, w, pp))])
                 clauses.append([-pool.id(("X", j, i, w, pp))])
-    if n >= 2:
-        clauses.append([pool.id(("X", 1, n, 1, 1))])  # orientation (1,n) at home in p=1
+    
+    clauses.append([pool.id(("X", 1, n, 1, 1))])  # orientation (1,n) at home in p=1
 
 # -----------------------------
 #  Main model builder
 # -----------------------------
-def build_base_formula(n: int):
+def build_base_formula(n: int, extra_symmetry: bool = True):
+    """
+    Build the base CNF for STS with the circle-method week assignment.
+    If extra_symmetry=True (default), apply the additional symmetry break that fixes
+    the periods of week 1 (_fix_week1_periods). Setting extra_symmetry=False disables
+    only that extra fix, keeping the circle-method pruning intact (same complexity,
+    ma senza il vincolo aggiuntivo sulla settimana 1).
+    """
     assert n % 2 == 0 and n >= 2, "n needs to be even and ≥ 2"
 
     pool = IDPool()
@@ -84,7 +92,7 @@ def build_base_formula(n: int):
     periods = list(range(1, n // 2 + 1))      # 1..n/2
     teams = list(range(1, n + 1))             # 1..n
 
-    # For compatibility with the rest: X where the team is "home"
+    # For compatibility with the optimization: X where the team is "home"
     home_vars: Dict[int, List[int]] = {t: [] for t in teams}
 
     # ---- Symmetry breaking: assign a week to each pair with the circle method ----
@@ -120,7 +128,7 @@ def build_base_formula(n: int):
             if u >= v:
                 continue
             w_star = week_of_pair[(u, v)]
-            # forbid all other weeks (unit)
+            # forbid all other weeks
             for w in weeks:
                 if w == w_star:
                     continue
@@ -149,6 +157,7 @@ def build_base_formula(n: int):
                 x_home = pool.id(("X", t, opp, w, p))
                 x_away = pool.id(("X", opp, t, w, p))
                 # X ⇒ Y (only for that week's pair; the other X are already false)
+                # (-x_home ∨ y), (-x_away ∨ y)
                 clauses.append([-x_home, y])
                 clauses.append([-x_away, y])
                 # Y ⇒ (X_home ∨ X_away)
@@ -180,8 +189,9 @@ def build_base_formula(n: int):
             clauses += _atmost(y_tp, 2, pool)
 
     # -----------------------------
-    #  (6) Extra symmetry: fix the periods of week 1
+    #  (6) Extra symmetry: fix the periods of week 1 (toggle)
     # -----------------------------
-    _fix_week1_periods(n, pool, clauses)
+    if extra_symmetry:
+        _fix_week1_periods(n, pool, clauses)
 
     return clauses, home_vars, pool
