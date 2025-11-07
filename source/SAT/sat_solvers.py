@@ -57,22 +57,21 @@ def get_solver_kind(name: str):
 
 def solve_pysat_with_timeout(solver, timeout_sec: int):
     """
-    Uses a PySAT solver to solve with a cooperative timeout.
+    Uses a PySAT solver to solve with timeout.
     Return: True (SAT), False (UNSAT), None (timeout/interrupted).
     """
     # Needs a solver supporting solve_limited() and interrupt()
     if not hasattr(solver, "solve_limited"):
-        print("This solver does not support solve_limited(); no cooperative timeout.")
-        # Blocking fallback: either refuse or accept the risk of exceeding the limit
+        print("This solver does not support solve_limited(); no timeout.")
         return None
 
     if not hasattr(solver, "interrupt") or not hasattr(solver, "clear_interrupt"):
-        print("This solver does not support interrupt(); no cooperative timeout.")
+        print("This solver does not support interrupt(); no timeout.")
         return None
 
     stop = threading.Event()
 
-    def killer():
+    def solver_killer():
         # Wait timeout_sec seconds, then interrupt solver if not stopped
         if not stop.wait(max(1, int(timeout_sec))):
             try:
@@ -80,7 +79,7 @@ def solve_pysat_with_timeout(solver, timeout_sec: int):
             except Exception:
                 pass
 
-    t = threading.Thread(target=killer, daemon=True)
+    t = threading.Thread(target=solver_killer, daemon=True)
     t.start()
 
     try:
@@ -99,15 +98,41 @@ def solve_pysat_with_timeout(solver, timeout_sec: int):
         return None
     return bool(res)
 
+def run_dimacs_with_pysat_extra(solver_name: str, cnf_path: str, extra_clauses, timeout_sec: int):
+    """
+    Same as run_dimacs_with_pysat but allows adding extra clauses (e.g. fairness).
+    Returns (result, model) where result is True/False/None and model is the assignment if SAT.
+    """
+    from pysat.formula import CNF
+    SolverClass = get_solver_kind(solver_name)
+
+    if SolverClass == "z3":
+        raise ValueError("run_dimacs_with_pysat_extra must be used only with PySAT solvers, not z3.")
+    
+    cnf = CNF(from_file=cnf_path)
+    solver = SolverClass(bootstrap_with=cnf.clauses)
+    
+    try:
+        for c in (extra_clauses or []):
+            solver.add_clause(c)
+        res = solve_pysat_with_timeout(solver, timeout_sec)
+        model = solver.get_model() if res is True else None
+        return res, model
+    finally:
+        try:
+            solver.delete()
+        except Exception:
+            pass
+
 
 # -----------------------------
-#  DIMACS export & run helpers
+#  DIMACS export & helpers
 # -----------------------------
 def export_dimacs(clauses, top_var: int, filepath: str) -> str:
     """
     Exports clauses to a DIMACS file at 'filepath'.
-    'clauses' is a list of lists of integers.
-    'top_var' is the highest variable index (or None to auto-detect).
+        'clauses' is a list of lists of integers.
+        'top_var' is the highest variable index (or None to auto-detect).
     Returns the filepath.
     """
     from pysat.formula import CNF
@@ -118,24 +143,26 @@ def export_dimacs(clauses, top_var: int, filepath: str) -> str:
 
     # to_file already exports in DIMACS format
     cnf.to_file(filepath)
-
     return filepath
 
 
 def run_dimacs_with_pysat(solver_name: str, cnf_path: str, timeout_sec: int):
     """
     Reads a DIMACS file from 'cnf_path' and solves it with the specified PySAT solver.
-    'solver_name' is the name of the solver to use.
-    'timeout_sec' is the timeout in seconds.
+        'solver_name' is the name of the solver to use.
+        'timeout_sec' is the timeout in seconds.
     Returns a tuple (result, model) where result is True (SAT), False (UNSAT), or None (timeout),
     and model is the satisfying assignment if result is True, otherwise None.
     """
     from pysat.formula import CNF
     SolverClass = get_solver_kind(solver_name)
+
     if SolverClass == "z3":
         raise ValueError("run_dimacs_with_pysat must be used only with PySAT solvers, not with z3.")
+    
     cnf = CNF(from_file=cnf_path)
     solver = SolverClass(bootstrap_with=cnf.clauses)
+    
     try:
         res = solve_pysat_with_timeout(solver, timeout_sec)
         model = solver.get_model() if res is True else None
