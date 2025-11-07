@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-# CP runner (300s). Usage: python run_cp.py <dec|opt> <N>
+# CP runner (300s). Usage:
+#   python run_cp.py <dec|opt> <N> [noSB] [noImplied]
 # - Tries all solvers in SOLVERS
 # - Caps JSON time to TLIMIT
-# - Merges with existing res/CP/<N>.json if present (keeps other mode's results)
+# - Merges with existing res/CP/<N>.json
+# - Optional flags:
+#     noSB       -> sets MiniZinc param SB=false and appends _noSB to JSON keys
+#     noImplied  -> sets MiniZinc param IMPLIED=false and appends _noImplied to JSON keys
 
 import json, os, sys, time
 from datetime import timedelta
@@ -34,7 +38,24 @@ def pack_solution(H, A, n: int):
     return out
 
 
-def run_one(model_path: str, n: int, solver_name: str, mode: str):
+def build_suffix(sb_enabled: bool, implied_enabled: bool) -> str:
+    parts = []
+    if not sb_enabled:
+        parts.append("noSB")
+    if not implied_enabled:
+        parts.append("noImplied")
+    return "" if not parts else "_" + "_".join(parts)
+
+
+def run_one(
+    model_path: str,
+    n: int,
+    solver_name: str,
+    mode: str,
+    sb_enabled: bool,
+    implied_enabled: bool,
+    key_suffix: str,
+):
     """Run one model/solver; always cap time in JSON to TLIMIT."""
     try:
         solver = Solver.lookup(solver_name)
@@ -45,12 +66,27 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str):
     inst = Instance(solver, Model(model_path))
     inst["n"] = n
 
-    log(f"[run]  {solver_name} | mode={mode} | tlimit={TLIMIT}s")
+    # Try to pass SB / IMPLIED if the model declares them.
+    # If they are not declared, MiniZinc will raise; we guard with try/except.
+    try:
+        inst["SB"] = sb_enabled
+    except Exception:
+        pass
+    try:
+        inst["IMPLIED"] = implied_enabled
+    except Exception:
+        pass
+
+    log(
+        f"[run]  {solver_name} | mode={mode} | SB={sb_enabled} | IMPLIED={implied_enabled} | tlimit={TLIMIT}s"
+    )
     t0 = time.perf_counter()
     try:
         res = inst.solve(timeout=timedelta(seconds=TLIMIT), all_solutions=False)
     except Exception as e:
-        log(f"[done] {solver_name} | mode={mode} | ERROR: {e}")
+        log(
+            f"[done] {solver_name} | mode={mode} | SB={sb_enabled} | IMPLIED={implied_enabled} | ERROR: {e}"
+        )
         return {
             "time": TLIMIT,
             "optimal": (mode == "opt" and False),
@@ -93,22 +129,35 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str):
         }
 
     log(
-        f"[done] {solver_name} | mode={mode} | status={status} | time={out['time']}s | "
+        f"[done] {solver_name} | mode={mode}{key_suffix} | status={status} | time={out['time']}s | "
         f"optimal={out['optimal']}" + (f" | obj={out['obj']}" if mode == "opt" else "")
     )
     return out
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python run_cp.py <dec|opt> <N>", file=sys.stderr)
+    if len(sys.argv) < 3 or len(sys.argv) > 5:
+        print(
+            "Usage: python run_cp.py <dec|opt> <N> [noSB] [noImplied]", file=sys.stderr
+        )
         sys.exit(2)
 
     mode = sys.argv[1].lower()
     if mode not in {"dec", "opt"}:
         print("Mode must be 'dec' or 'opt'.", file=sys.stderr)
         sys.exit(2)
-    n = int(sys.argv[2])
+    try:
+        n = int(sys.argv[2])
+    except Exception:
+        print("N must be an integer.", file=sys.stderr)
+        sys.exit(2)
+
+    # Parse optional flags
+    args = {a.lower() for a in sys.argv[3:]}
+    sb_enabled = "nosb" not in args
+    implied_enabled = "noimplied" not in args
+
+    key_suffix = build_suffix(sb_enabled, implied_enabled)
 
     os.makedirs(OUTDIR, exist_ok=True)
 
@@ -145,9 +194,17 @@ def main():
 
     # Run all solvers
     for solver_name in SOLVERS:
-        out = run_one(model_path, n, solver_name, mode=mode)
+        out = run_one(
+            model_path,
+            n,
+            solver_name,
+            mode=mode,
+            sb_enabled=sb_enabled,
+            implied_enabled=implied_enabled,
+            key_suffix=key_suffix,
+        )
         if out is not None:
-            results[f"{solver_name}_{mode}"] = out
+            results[f"{solver_name}_{mode}{key_suffix}"] = out
 
     # Write merged results (time capped)
     with open(out_path, "w") as fh:
