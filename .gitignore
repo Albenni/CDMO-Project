@@ -10,4 +10,10 @@ __pycache__/
 *.toc
 *.gz
 
+#BibTeX files
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+
 .venv

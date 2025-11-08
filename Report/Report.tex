@@ -3,6 +3,8 @@
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{hyperref}
+\usepackage[backend=biber,style=numeric]{biblatex}
+\addbibresource{references.bib}
 
 \title{Project Title}
 \author{Name, lastname and UniBo e-mail addresses\\
@@ -417,9 +419,9 @@ $n$ & CP-SAT (noImplied) & Chuffed (noImplied) & Gecode (noImplied) \\
 \medskip
 \noindent\textit{Key takeaways.} (1) The staged search focused on $W$ is critical in optimization; (2) \texttt{cp-sat} is the most robust on feasibility; (3) implied constraints are beneficial overall for optimization (stronger propagation), but may slow down easy feasibility, especially for \texttt{chuffed}; (4) symmetry breaking improves consistency and interpretability, yet its ablation can occasionally help first-solution time in SAT-style search—tuning is solver-dependent.
 
-\subsection{SAT Model (decision \& optimization)}
+\subsection{SAT Model}
 
-We encode STS in propositional CNF using two families of literals. The solver interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export $\rightarrow$ MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from CNF generation (when applicable), and results are written under \texttt{res/SAT/\#}.json in the format required by the project (\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
+We encode STS in propositional CNF using two families of literals. The solver interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export with MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from CNF generation (when applicable), and results are written under \texttt{res/SAT/\#}.json in the format required by the project (\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
 
 \paragraph{Indexing.}
 Let $n$ be even. We use \emph{Teams} $=\{1,\dots,n\}$, \emph{Weeks} $=\{1,\dots,n-1\}$, and \emph{Periods} $=\{1,\dots,n/2\}$. A schedule is an $(n/2)\times(n-1)$ matrix whose entry $(p,w)$ holds exactly one oriented match $(i,j)$ with $i$ at home and $j$ away.
@@ -461,7 +463,7 @@ For each $(w,p)$ we enforce $\sum_t Y_{t,w,p}=2$ via AtMost2 and its dual (AtLea
 For each team $t$ and period $p$, $\sum_w Y_{t,w,p}\le 2$.
 
 \paragraph{Extra symmetry breaking (toggle).}
-When enabled, week~1 is fixed at period granularity (pair $\,(i,n\!+\!1\!-\!i)\,$ plays in period $i$) and the match $(1,n)$ is oriented as home for team 1 in $(w,p)=(1,1)$. This removes residual week/period symmetries. We provide both ``SB'' and ``no~SB'' variants in experiments.
+When enabled, week~1 is fixed at period granularity (pair $\,(i,n\!+\!1\!-\!i)\,$ plays in period $i$) and the match $(1,n)$ is oriented as home for team 1 in $(w,p)=(1,1)$. This removes residual week/period symmetries and follows the modelling advice on symmetry breaking for Round Robin-style encodings~\cite{martins-impact-sat-modelling}.
 
 \subsubsection*{Optimization in SAT (fairness)}
 We minimize the maximum home/away imbalance
@@ -475,13 +477,13 @@ where $T=n\!-\!1$ and $\text{home}_i=\sum_{j\ne i,w,p} X_{i,j,w,p}$. We solve th
 \textbf{PySAT backends.} We export CNF to DIMACS (\texttt{pysat.formula.CNF.to\_file}) and run the selected solver with a hard timeout using \texttt{solve\_limited} plus a watchdog \texttt{interrupt}; for optimization we reuse the same DIMACS and add per-$d$ fairness clauses. All solvers are used sequentially, as required.
 
 \subsubsection*{Solution format and JSON writing}
-A satisfying assignment is decoded into an $(n/2)\times(n-1)$ matrix of pairs \texttt{[home, away]} by scanning the true $X$ literals. Each run is appended as a new key in \texttt{res/SAT/\#}.json (no overwrites), with time normalized to \texttt{min(actual, 300)} and \texttt{optimal} set according to the decision/optimization semantics.
+A satisfying assignment is decoded into an $(n/2)\times(n-1)$ matrix of pairs \texttt{[home, away]} by scanning the true $X$ literals. Each run is appended as a new key in \texttt{res/SAT/\#}.json, with time normalized to \texttt{min(actual, 300)} and \texttt{optimal} set according to the decision/optimization semantics.
 
 \paragraph{Why these modelling choices?}
-Symmetry breaking and encoding selection strongly affect SAT performance; we deliberately (i) fix a canonical week assignment via the circle method, (ii) keep local $X\!\leftrightarrow\!Y$ channels to obtain short clauses, and (iii) adapt cardinality encodings to scope/threshold. These are in line with evidence that modelling dominates runtime in highly symmetric timetabling problems.
+Symmetry breaking and encoding selection strongly affect SAT performance; we deliberately (i) fix a canonical week assignment via the circle method, (ii) keep local $X\!\leftrightarrow\!Y$ channels to obtain short clauses, and (iii) adapt cardinality encodings to scope/threshold. These choices are consistent with the recommendations on the impact of modelling (and symmetry breaking) in SAT problem solving~\cite{martins-impact-sat-modelling}.
 
 \subsubsection*{Validation setup}
-We follow the project rules: $300$s global limit including any pre-solving/printing; solvers run on a single core; and Z3 is mandatory while PySAT+DIMACS enables solver-independence (bonus). We report decision runtimes and, for optimization, the (best) objective value found within the limit; unsolved cases are marked with time $=300$ and \texttt{optimal=false}.
+We follow the project rules: $300$s global limit including any pre-solving/printing; solvers run on a single core; and Z3 is mandatory while PySAT+DIMACS enables solver-independence. We report decision runtimes and, for optimization, the (best) objective value found within the limit; unsolved cases are marked with time $=300$ and \texttt{optimal=false}.
 
 \subsubsection*{Experimental results (our runs)}
 Tables~\ref{tab:sat-decision}--\ref{tab:sat-optim} summarize the measured runtimes (seconds) for $n\in\{16,18\}$ on Z3, MiniSAT\,22, and Glucose\,3, with/without extra symmetry breaking (``SB''). ``300'' denotes a timeout per the rules; a checkmark indicates that a model was found (decision) or an optimal $d$ was proven (optimization).
@@ -501,7 +503,7 @@ $n=18$ & 34\,(\checkmark) & 90\,(\checkmark) & 300 & 300 & 300 & 300 \\
 \end{tabular}
 \caption{Decision SAT: runtime (s) and solved status.}
 \label{tab:sat-decision}
-\end{table}
+\end{table}  
 
 \begin{table}[h]
 \centering
@@ -524,7 +526,7 @@ $n=18$ & 107\,(\checkmark) & 300 & 300 & 300 & 300 & 300 \\
 \textbf{Observations.} (i) For $n=16$, PySAT with no SB is extremely fast (MiniSAT\,22 in $4$–$6$s), while Glucose\,3 still times out on the optimization variant; (ii) for $n=18$ only Z3 solved both decision and optimization within the limit; (iii) enabling the extra week-1 symmetry sometimes \emph{hurts} CDCL (e.g., MiniSAT\,22 at $n=16$), consistent with known interactions between SB clauses and branching heuristics.
 
 \subsubsection*{Reproducibility and outputs}
-Each approach/run is saved as a distinct key (no overwrite) in \texttt{res/SAT/\#}.json; the $(n/2)\times(n-1)$ \texttt{sol} matrix is reconstructed from true $X$ atoms. Time accounting includes DIMACS generation for PySAT runs, and all unsolved runs are normalized to \texttt{time=300} with \texttt{optimal=false}, exactly as prescribed.
+Each approach/run is saved as a distinct key in \texttt{res/SAT/\#}.json; the $(n/2)\times(n-1)$ \texttt{sol} matrix is reconstructed from true $X$ atoms. Time accounting includes DIMACS generation for PySAT runs, and all unsolved runs are normalized to \texttt{time=300} with \texttt{optimal=false}, exactly as prescribed.
 
 \subsubsection*{Limitations and future work}
 The circle-method week fixing is a strong SB that discards alternative week assignments; exploring weaker SBs or dynamic SB learning may further help CDCL solvers. Also, swapping AtMost encodings per scope/threshold already paid off; a systematic sensitivity study of encodings vs.\ solver/instance size would align with best practices in SAT modelling.
@@ -745,6 +747,6 @@ Also, briefly describe each author's contribution to the work.
 
 \section*{References}
 
-List of references.
+\printbibliography
 
 \end{document}
