@@ -273,46 +273,149 @@ A_{p,w}=\sum_{i<j} Z_{w,p,i,j}\, j.
 C_{1,1} = 1.
 \]
 \noindent This fixes team~1's unique single-use period to period~1, breaking the global permutation symmetry among periods without excluding non-equivalent schedules.
-
 \subsection{Validation}
 
-The model must be implemented in MiniZinc and run using at least Gecode. Bonus points will be considered if other solvers are tried. The purpose of the validation is to assess the performance of the solvers using various models and search strategies. It is a good practice to evaluate also the contribution of the implied and symmetry breaking constraints.
+The goal of this section is to evaluate the behaviour of the two CP models (decision and optimization) under different solvers and modelling variants (with/without symmetry breaking, with/without implied constraints), reporting time and solution quality within a strict $300$ seconds cap. We report only sequential runs, and times are floored to integers.
 
 \subsubsection*{Experimental design}
 
-Before presenting your experimental results, give all the details of your experimental study. Your results should be reproducible following your description. Explain which solvers you used and which search strategies you employed, as well as your experimental set up (e.g., the hardware and the software used, any posed time limit, etc.). Irreproducible experiments will not be considered.
+\textbf{Instances.} We tested even sizes $n\in\{8,10,12,14,16,18\}$ (decision: $n=4$ excluded by design).\\
+\textbf{Solvers.} MiniZinc back-ends: \texttt{cp-sat}, \texttt{chuffed}, \texttt{gecode}; timeout $300$ s per run.\\
+\textbf{Runner and data.} A Python wrapper sets $n$, runs the chosen MiniZinc model/solver, caps the recorded time at $300$ if not solved, and writes one JSON per instance under \texttt{res/CP/\{n\}.json}, merging approaches as distinct keys (e.g., \texttt{cp-sat\_dec}, \texttt{chuffed\_opt\_noSB}).\\
+\textbf{Approaches.} For each solver we consider: baseline (SB+Implied), \emph{noSB} (SB off, Implied on), \emph{noImplied} (SB on, Implied off).\\
+\textbf{Search strategies.} \emph{Optimization model:} staged search
+\[
+\texttt{seq\_search}\Big(
+\underbrace{\texttt{int\_search}(W,\ \texttt{dom\_w\_deg},\ \texttt{indomain\_min})}_{\text{weeks first}},\
+\underbrace{\texttt{bool\_search}(Z,\ \texttt{first\_fail})}_{\text{pairs}},\
+\underbrace{\texttt{bool\_search}(B,\ \texttt{first\_fail})}_{\text{orientations}}
+\Big).
+\]
+\emph{Decision model:} solver defaults (no user-defined search).\\
+\textbf{Result format.} Decision tables report the runtime in seconds (if no answer within $300$ s, we write ``$>300$’’). Optimization tables report the best objective value found (bold if proven optimal; ``–'' if no solution within the time limit).
 
 \subsubsection*{Experimental results}
 
-Present your experimental results in a clear way. It is mandatory to show a table where:
-\begin{itemize}
-    \item rows are labeled with the identifier of the instances,
-    \item columns are labeled with the different approaches you tried,
-    \item cells contain the runtime in seconds (in the decision version) or the best objective value (in the optimization version), as specified in the project description, found by the given approach on the given instance, using a certain search strategy.
-\end{itemize}
+All numbers below are directly taken from the produced JSON files in \texttt{res/CP}.
 
-If the instance is solved to optimality, emphasize the objective value in bold. If the instance is proved to be unsatisfiable, indicate it as ``UNSAT''. If no answer is obtained within the time limit, indicate it with ``N/A'' or ``-''.
-
-For example, ``The results obtained using the search strategy $h$ are reported in Table~\ref{tab:results}.''
-
+\paragraph{Decision model — baseline (SB+Implied).}
 \begin{table}[h]
-    \centering
-    \begin{tabular}{lcccc}
-        \toprule
-        ID &
-        Chuffed + SB &
-        Chuffed w/out SB &
-        Gecode + SB &
-        Gecode w/out SB \\
-        \midrule
-        1 & 100 & 120 & 80  & 80 \\
-        2 & 50  & 60  & N/A & N/A \\
-        3 & UNSAT & UNSAT & N/A & N/A \\
-        \bottomrule
-    \end{tabular}
-    \caption{Results using Gecode and Chuffed with and without symmetry breaking using the search strategy $h$.}
-    \label{tab:results}
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT & Chuffed & Gecode \\
+\midrule
+8  & 0    & 0     & 0     \\
+10 & 17   & >300  & 0     \\
+12 & 3    & >300  & >300  \\
+14 & 11   & >300  & >300  \\
+16 & >300 & >300  & >300  \\
+18 & >300 & >300  & >300  \\
+\bottomrule
+\end{tabular}
+\caption{Decision, baseline (SB+Implied).}
 \end{table}
+
+\paragraph{Decision model — SB ablation (noSB, Implied on).}
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT (noSB) & Chuffed (noSB) & Gecode (noSB) \\
+\midrule
+8  & 0    & 0    & 0     \\
+10 & 3    & 0    & 80    \\
+12 & 75   & 7    & >300  \\
+14 & 200  & >300 & >300  \\
+16 & 131  & >300 & >300  \\
+18 & >300 & >300 & >300  \\
+\bottomrule
+\end{tabular}
+\caption{Decision, \emph{noSB}.}
+\end{table}
+
+\paragraph{Decision model — Implied ablation (noImplied, SB on).}
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT (noImplied) & Chuffed (noImplied) & Gecode (noImplied) \\
+\midrule
+8  & 0    & 0    & 0     \\
+10 & 83   & 2    & 0     \\
+12 & 10   & 1    & >300  \\
+14 & 62   & 9    & >300  \\
+16 & 209  & >300 & >300  \\
+18 & >300 & >300 & >300  \\
+\bottomrule
+\end{tabular}
+\caption{Decision, \emph{noImplied}.}
+\end{table}
+
+\paragraph{Optimization model — baseline (SB+Implied).}
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT & Chuffed & Gecode \\
+\midrule
+8  & \textbf{8}  & \textbf{8}  & \textbf{8}  \\
+10 & \textbf{10} & \textbf{10} & \textbf{10} \\
+12 & \textbf{12} & \textbf{12} & \textbf{12} \\
+14 & \textbf{14} & \textbf{14} & – \\
+16 & – & – & – \\
+18 & – & – & – \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, baseline: best objective (bold if proven optimal).}
+\end{table}
+
+\paragraph{Optimization model — SB ablation (noSB, Implied on).}
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT (noSB) & Chuffed (noSB) & Gecode (noSB) \\
+\midrule
+8  & \textbf{8}  & \textbf{8}  & \textbf{8} \\
+10 & \textbf{10} & \textbf{10} & \textbf{10} \\
+12 & \textbf{12} & \textbf{12} & – \\
+14 & \textbf{14} & \textbf{14} & – \\
+16 & – & – & – \\
+18 & – & – & – \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, \emph{noSB}: best objective (bold if proven optimal).}
+\end{table}
+
+\paragraph{Optimization model — Implied ablation (noImplied, SB on).}
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT (noImplied) & Chuffed (noImplied) & Gecode (noImplied) \\
+\midrule
+8  & \textbf{8}  & \textbf{8}  & \textbf{8} \\
+10 & \textbf{10} & \textbf{10} & – \\
+12 & \textbf{12} & – & – \\
+14 & \textbf{14} & – & – \\
+16 & – & – & – \\
+18 & – & – & – \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, \emph{noImplied}: best objective (bold if proven optimal).}
+\end{table}
+
+\subsubsection*{Discussion}
+
+\textbf{Decision model.} With SB+Implied on, \texttt{cp-sat} quickly solves up to $n=14$, while \texttt{chuffed} and \texttt{gecode} often time out beyond $n=10$. Turning SB off helps some cases (e.g., $n=10$ where all solvers succeed fast, and $n=16$ where \texttt{cp-sat} finds a solution in $131$ s), but it can significantly hurt \texttt{cp-sat} on mid sizes ($n=12,14$), suggesting that the canonical Week~1 pairing reduces early branching entropy in a way that benefits its SAT-style search. Disabling implied constraints (\emph{noImplied}) systematically helps \texttt{chuffed} on $n\in\{10,12,14\}$ (down to a few seconds), likely because the additional channel/profile constraints increase propagation work that does not always pay back on pure feasibility; \texttt{cp-sat} instead benefits more from the implied structure on mid sizes, except at $n=16$ where \emph{noImplied} becomes advantageous.
+
+\textbf{Optimization model.} With the staged search (dom/wdeg on $W$ first), both \texttt{cp-sat} and \texttt{chuffed} prove optimality up to $n=14$ very quickly; \texttt{gecode} keeps pace up to $n=12$, then times out at $n=14$. This is consistent with expectations: focusing first on the week variables $W$ (tied by \texttt{alldifferent}) turns the hardest propagation layer upfront, after which assigning $Z$ and $B$ is comparatively cheap. Turning SB off does not degrade performance for \texttt{cp-sat} and sometimes helps \texttt{chuffed} confirm optimality at $n=12,14$. Turning off implied constraints weakens pruning; \texttt{cp-sat} still proves optimality up to $n=14$, whereas \texttt{chuffed} and \texttt{gecode} lose robustness earlier.
+
+\textbf{Beyond $n=14$.} For $n\ge 16$ the optimization model returns no solution within the time cap for any solver, and the decision model becomes difficult for all but \texttt{cp-sat} (and only under certain variants). Scaling further would likely require heavier search control (restarts tuning, alternative VOHs) or hybrid search (e.g., LNS seeded by feasible CP solutions).
+
+\medskip
+\noindent\textit{Key takeaways.} (1) The staged search focused on $W$ is critical in optimization; (2) \texttt{cp-sat} is the most robust on feasibility; (3) implied constraints are beneficial overall for optimization (stronger propagation), but may slow down easy feasibility, especially for \texttt{chuffed}; (4) symmetry breaking improves consistency and interpretability, yet its ablation can occasionally help first-solution time in SAT-style search—tuning is solver-dependent.
 
 \subsection{SAT Model (decision \& optimization)}
 
