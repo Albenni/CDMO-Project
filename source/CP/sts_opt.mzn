@@ -1,10 +1,10 @@
 include "globals.mzn";
 
-% ---- Switches
+% Switches
 bool: SB;        % Symmetry breaking on/off
 bool: IMPLIED;   % Implied constraints on/off
 
-% ---- Parameters and index sets
+% Parameters and index sets
 int: n;
 constraint n mod 2 = 0;
 
@@ -12,8 +12,8 @@ set of int: Teams   = 1..n;
 set of int: Weeks   = 1..(n - 1);
 set of int: Periods = 1..(n div 2);
 
-% ---- Decision variables
-array[Weeks, Periods, Teams, Teams] of var bool: Z;      % pair in slot (i<j)
+% Decision variables
+array[Weeks, Periods, Teams, Teams] of var bool: Z;       % pair in slot (i<j)
 array[Teams, Teams] of var bool: B;                       % orientation for pairs (i<j)
 array[Teams, Teams] of var Weeks: W;                      % week of each pair (i<j)
 array[Weeks, Periods, Teams] of var bool: U;              % occupancy per slot
@@ -21,7 +21,7 @@ array[Teams, Periods] of var 1..2: C;                     % period-usage count (
 array[Periods, Weeks] of var Teams: H;                    % output home
 array[Periods, Weeks] of var Teams: A;                    % output away
 
-% ---- Pair-index cleanup (self-matches and duplicates)
+% Pair-index cleanup (self-matches and duplicates)
 constraint forall(w in Weeks, p in Periods, i in Teams, j in Teams where i >= j)(
   Z[w,p,i,j] = false
 );
@@ -29,7 +29,7 @@ constraint forall(i in Teams, j in Teams where i >= j)(
   B[i,j] = false /\ W[i,j] = 1
 );
 
-% ---- Core constraints
+% Core constraints
 % One match per slot
 constraint forall(w in Weeks, p in Periods)(
   sum(i in Teams, j in Teams where i < j)( bool2int(Z[w,p,i,j]) ) = 1
@@ -52,24 +52,24 @@ constraint forall(w in Weeks, t in Teams)(
   sum(p in Periods)( bool2int(U[w,p,t]) ) = 1
 );
 
-% Period load cap (core requirement)
+% Period load cap 
 constraint forall(t in Teams, p in Periods)(
   sum(w in Weeks)( bool2int(U[w,p,t]) ) <= 2
 );
 
-% ---- Period usage counts (channel always useful)
+% Period usage counts (channel always useful)
 constraint forall(t in Teams, p in Periods)(
   C[t,p] = sum(w in Weeks)( bool2int(U[w,p,t]) )
 );
 
-% ---- Implied: exact per-team period profile (enable with IMPLIED)
+% Implied: exact per-team period profile 
 constraint IMPLIED ->
   forall(t in Teams)(
     sum(p in Periods)( C[t,p] ) = n - 1 /\
     sum(p in Periods)( bool2int(C[t,p] = 1) ) = 1
   );
 
-% ---- Dual viewpoint: W <-> Z (pair -> week)
+% Dual viewpoint: W <-> Z (pair -> week)
 constraint forall(i in Teams, j in Teams where i < j)(
   sum(w in Weeks)( bool2int(W[i,j] = w) ) = 1 /\
   forall(w in Weeks)(
@@ -77,13 +77,13 @@ constraint forall(i in Teams, j in Teams where i < j)(
   )
 );
 
-% ---- Implied: alldifferent on weeks per team (stronger propagation)
+% Implied: alldifferent on weeks per team (stronger propagation)
 constraint IMPLIED ->
   forall(t in Teams)(
     alldifferent([ W[min(t,j), max(t,j)] | j in Teams where j != t ])
   );
 
-% ---- Symmetry breaking (enable with SB)
+% Symmetry breaking 
 % Week 1 canonical pairing
 constraint SB -> forall(p in Periods)(
   Z[1, p, 2*p - 1, 2*p] = true
@@ -95,7 +95,7 @@ constraint SB -> forall(p in Periods)(
 % Period-label anchor: team 1's single-use period is Period 1
 constraint SB -> (C[1,1] = 1);
 
-% ---- Home counts and fairness objective
+% Home counts and fairness objective
 array[Teams] of var 0..(n - 1): Hc;
 constraint forall(t in Teams)(
   Hc[t] =
@@ -111,14 +111,14 @@ constraint forall(t in Teams)(
 
 var 0..(n * (n - 1)): obj = sum(t in Teams)(dev[t]);
 
-% Implied: global home-count balance and objective LB (toggle with IMPLIED)
+% Implied: global home-count balance and objective LB 
 constraint IMPLIED -> (sum(t in Teams)(Hc[t]) = (n*(n-1)) div 2);
 constraint IMPLIED -> (obj >= n);
 
 % Non-implied pruning cut observed safe for tested instances
 constraint obj <= 2*n;
 
-% ---- Output construction from Z and B
+% Output construction from Z and B
 constraint forall(w in Weeks, p in Periods)(
   H[p,w] = sum(i in Teams, j in Teams where i < j)(
              bool2int(Z[w,p,i,j]) *
@@ -130,13 +130,13 @@ constraint forall(w in Weeks, p in Periods)(
            )
 );
 
-% ---- Output
+% Output
 output [
   "obj=", show(obj), "\n",
   "H=\n", show(H), "\nA=\n", show(A), "\n"
 ];
 
-% ---- Search strategy (W -> Z -> B)
+% Search strategy (W -> Z -> B)
 solve :: seq_search([
   int_search([ W[i,j] | i in Teams, j in Teams where i < j ],
              dom_w_deg, indomain_min, complete),

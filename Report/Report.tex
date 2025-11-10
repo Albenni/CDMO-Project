@@ -295,7 +295,7 @@ We separate the structural calendar from orientations and solve in three phases:
   \item[(2)] place pairs $Z$ within the chosen week (\emph{structural refinement});
   \item[(3)] set orientations $B$ (\emph{break}).
 \end{itemize}
-This stratification follows Trick’s classic \emph{schedule–then–break} rationale for sports timetabling: first construct the weekly round-robin schedule ignoring home/away, then assign orientations to control breaks and fairness. In our CP setting, the idea is that the strongest propagation lives in the structural layer (e.g., team-wise \texttt{alldifferent} across weeks), so we commit those decisions early and defer the cheaper binary choices to the end. We implement the phases with a sequential search:
+This stratification follows Trick's classic \emph{schedule-then-break} rationale for sports timetabling: first build a weekly round-robin schedule ignoring home/away, then orient the matches to control breaks and fairness. In our CP setting, the intuition is that the most powerful propagation sits in the structural layer-e.g., team-wise \texttt{alldifferent} across the weeks-so we make those choices early, and leave the cheaper binary ones to the end. We implement the phases with a sequential search:
 \[
 \begin{aligned}
 \texttt{seq\_search}\Big(&
@@ -305,9 +305,7 @@ This stratification follows Trick’s classic \emph{schedule–then–break} rat
 \Big).
 \end{aligned}
 \]
-Here, \texttt{dom\_w\_deg} (domain/weighted-degree) prioritises the most constrained/conflict-rich week decisions, while
-\texttt{first\_fail} applies a fail-first policy to the Boolean layers; this mirrors the two-phase schedule–then–break approach~\cite{TrickScheduleThenBreak}.
-
+Here, \texttt{dom\_w\_deg} is a heuristic that selects the most constrained/conflict-rich week decisions, while \texttt{first\_fail} implements a fail-first policy on the Boolean layers; this models the two-phase approach of schedule--then--break~\cite{TrickScheduleThenBreak}.\\
 \noindent\emph{Decision model.} Solver defaults (no user-defined search).
 
 \hspace*{1.5em}\textbf{Result format.} Decision tables report the runtime in seconds (if no answer within $300$ s, we write ``$>300$’’).
@@ -324,8 +322,8 @@ All numbers below are directly taken from the produced JSON files in \texttt{res
 \toprule
 $n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & 0      & 0       & 0     \\
-10 & 17     & $>300$  & 0     \\
+8  & 0      & 0       & 0       \\
+10 & 17     & $>300$  & 0       \\
 12 & 3      & $>300$  & $>300$  \\
 14 & 11     & $>300$  & $>300$  \\
 16 & $>300$ & $>300$  & $>300$  \\
@@ -341,12 +339,12 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \toprule
 $n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & 0      & 0      & 0     \\
-10 & 3      & 0      & 80    \\
-12 & 75     & 7      & $>300$  \\
-14 & 200    & $>300$ & $>300$  \\
-16 & 131    & $>300$ & $>300$  \\
-18 & $>300$ & $>300$ & $>300$  \\
+8  & 0      & 0      & 0        \\
+10 & 3      & 0      & 80       \\
+12 & 75     & 7      & $>300$   \\
+14 & 200    & $>300$ & $>300$   \\
+16 & 131    & $>300$ & $>300$   \\
+18 & $>300$ & $>300$ & $>300$   \\
 \bottomrule
 \end{tabular}
 \caption{Decision, \emph{noSB}.}
@@ -358,12 +356,12 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \toprule
 $n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & 0      & 0      & 0     \\
-10 & 83     & 2      & 0     \\
-12 & 10     & 1      & $>300$  \\
-14 & 62     & 9      & $>300$  \\
-16 & 209    & $>300$ & $>300$  \\
-18 & $>300$ & $>300$ & $>300$  \\
+8  & 0      & 0      & 0        \\
+10 & 83     & 2      & 0        \\
+12 & 10     & 1      & $>300$   \\
+14 & 62     & 9      & $>300$   \\
+16 & 209    & $>300$ & $>300$   \\
+18 & $>300$ & $>300$ & $>300$   \\
 \bottomrule
 \end{tabular}
 \caption{Decision, \emph{noImplied}.}
@@ -375,12 +373,12 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \toprule
 $n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & 0      & 0      & 0     \\
-10 & 3      & 0      & $>300$  \\
-12 & 70     & 1      & $>300$  \\
-14 & 227    & $>300$ & $>300$  \\
-16 & 223    & $>300$ & $>300$  \\
-18 & $>300$ & $>300$ & $>300$  \\
+8  & 0      & 0      & 0        \\
+10 & 3      & 0      & $>300$   \\
+12 & 70     & 1      & $>300$   \\
+14 & 227    & $>300$ & $>300$   \\
+16 & 223    & $>300$ & $>300$   \\
+18 & $>300$ & $>300$ & $>300$   \\
 \bottomrule
 \end{tabular}
 \caption{Decision, \emph{noImplied, noSB}.}
@@ -390,11 +388,11 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \centering
 \begin{tabular}{lccc}
 \toprule
-$n$ & CP-SAT & Chuffed & Gecode \\
+$n$ & CP-SAT & Chuffed & Gecode                               \\
 \midrule
-8  & 0 / \textbf{8}   & 0 / \textbf{8}   & 0 / \textbf{8}   \\
-10 & 2 / \textbf{10}  & 1 / \textbf{10}  & 0 / \textbf{10}  \\
-12 & 7 / \textbf{12}  & 2 / \textbf{12}  & 77 / \textbf{12} \\
+8  & 0 / \textbf{8}   & 0 / \textbf{8}   & 0 / \textbf{8}     \\
+10 & 2 / \textbf{10}  & 1 / \textbf{10}  & 0 / \textbf{10}    \\
+12 & 7 / \textbf{12}  & 2 / \textbf{12}  & 77 / \textbf{12}   \\
 14 & 28 / \textbf{14} & 47 / \textbf{14} & $>300$ / --        \\
 16 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
 18 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
@@ -407,10 +405,10 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \centering
 \begin{tabular}{lccc}
 \toprule
-$n$ & CP-SAT & Chuffed & Gecode \\
+$n$ & CP-SAT & Chuffed & Gecode                               \\
 \midrule
-8  & 1 / \textbf{8}   & 1 / \textbf{8}   & 0 / \textbf{8}   \\
-10 & 2 / \textbf{10}  & 0 / \textbf{10}  & 0 / \textbf{10}  \\
+8  & 1 / \textbf{8}   & 1 / \textbf{8}   & 0 / \textbf{8}     \\
+10 & 2 / \textbf{10}  & 0 / \textbf{10}  & 0 / \textbf{10}    \\
 12 & 9 / \textbf{12}  & 2 / \textbf{12}  & $>300$ / --        \\
 14 & 168 / \textbf{14}& 14 / \textbf{14} & $>300$ / --        \\
 16 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
@@ -424,9 +422,9 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \centering
 \begin{tabular}{lccc}
 \toprule
-$n$ & CP-SAT & Chuffed & Gecode \\
+$n$ & CP-SAT & Chuffed & Gecode                              \\
 \midrule
-8  & 0 / \textbf{8}   & 0 / \textbf{8}   & 19 / \textbf{8} \\
+8  & 0 / \textbf{8}   & 0 / \textbf{8}   & 19 / \textbf{8}   \\
 10 & 2 / \textbf{10}  & 3 / \textbf{10}  & $>300$ / --       \\
 12 & 8 / \textbf{12}  & $>300$ / --      & $>300$ / --       \\
 14 & 46 / \textbf{14} & $>300$ / --      & $>300$ / --       \\
@@ -441,9 +439,9 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \centering
 \begin{tabular}{lccc}
 \toprule
-$n$ & CP-SAT & Chuffed & Gecode \\
+$n$ & CP-SAT & Chuffed & Gecode                              \\
 \midrule
-8  & 1 / \textbf{8}   & 1 / \textbf{8}   & 275 / \textbf{8}\\
+8  & 1 / \textbf{8}   & 1 / \textbf{8}   & 275 / \textbf{8}  \\
 10 & 3 / \textbf{10}  & 66 / \textbf{10} & $>300$ / --       \\
 12 & 10 / \textbf{12} & $>300$ / --      & $>300$ / --       \\
 14 & 188/ \textbf{14} & $>300$ / --      & $>300$ / --       \\
@@ -454,18 +452,49 @@ $n$ & CP-SAT & Chuffed & Gecode \\
 \caption{Optimization, \emph{noImplied, noSB}.}
 \end{table}
 
-\subsubsection*{Discussion}
+\paragraph{Decision model}
+\begin{itemize}
+  \item \textbf{Who wins where:} With SB+Implied on, \texttt{cp-sat} solves up to $n=14$ quickly, while \texttt{chuffed} and \texttt{gecode} often time out beyond $n=10$. The reasons differ: \texttt{cp-sat} is SAT-based (clause learning, restarts, phase saving) and benefits from many Boolean variables and informative redundant constraints; \texttt{chuffed} is Lazy Clause Generation CP and needs strong propagation; \texttt{gecode} is a \emph{finite-domain} constraint solver, which relies mostly on propagation plus the user’s branching choices, without clause learning.
+  
+  \item \textbf{Why symmetry breaking (SB) can help or hurt:} Fixing Week~1 to a canonical matching removes many symmetric schedules, which usually shrinks the tree and helps classical CP engines (\texttt{chuffed} and \texttt{gecode}). For \texttt{cp-sat}, however, breaking symmetry can also remove some alternative, equivalent routes to a quick first solution; leaving a small amount of symmetry sometimes gives more “entry points” that restarts and phase saving can exploit.
+   
+  \item \textbf{Why Implied constraints can look “expensive”:} Implied constraints are extra (redundant) constraints we add on purpose to tighten the model and prune earlier. They also create more propagation work at each node. On small/easy decision instances this extra work can exceed the benefits, so \texttt{chuffed} often runs faster with \emph{noImplied}. On harder instances or in optimization, the stronger consistency usually pays off and all solvers benefit. 
+\end{itemize}
 
-\textbf{Decision model.} With SB+Implied on, \texttt{cp-sat} quickly solves up to $n=14$, while \texttt{chuffed} and \texttt{gecode} often time out beyond $n=10$. Turning SB off helps some cases (e.g., $n=10$ where all solvers succeed fast, and $n=16$ where \texttt{cp-sat} finds a solution in $131$ s), but it can significantly hurt \texttt{cp-sat} on mid sizes ($n=12,14$), suggesting that the canonical Week~1 pairing reduces early branching entropy in a way that benefits its SAT-style search. Disabling implied constraints (\emph{noImplied}) systematically helps \texttt{chuffed} on $n\in\{10,12,14\}$ (down to a few seconds), likely because the additional channel/profile constraints increase propagation work that does not always pay back on pure feasibility; \texttt{cp-sat} instead benefits more from the implied structure on mid sizes, except at $n=16$ where \emph{noImplied} becomes advantageous.
 
-\textbf{Optimization model.} With the staged search (dom/wdeg on $W$ first), both \texttt{cp-sat} and \texttt{chuffed} prove optimality up to $n=14$ very quickly; \texttt{gecode} keeps pace up to $n=12$, then times out at $n=14$. This is consistent with expectations: focusing first on the week variables $W$ (tied by \texttt{alldifferent}) turns the hardest propagation layer upfront, after which assigning $Z$ and $B$ is comparatively cheap. Turning SB off does not degrade performance for \texttt{cp-sat} and sometimes helps \texttt{chuffed} confirm optimality at $n=12,14$. Turning off implied constraints weakens pruning; \texttt{cp-sat} still proves optimality up to $n=14$, whereas \texttt{chuffed} and \texttt{gecode} lose robustness earlier.
+\paragraph{Optimization model}
+\begin{itemize}
+  \item \textbf{Why the phased search works:} Pushing $W$ first hits the strongest global (\texttt{alldifferent} over weeks). Once weeks are pinned down, $Z$ becomes a tidy placement task, and $B$ is a cheap orientation layer guided by the objective. That’s tailor-made for both \texttt{cp-sat} and \texttt{chuffed}.
+  \item \textbf{Engine behaviour in practice:}
+    \begin{itemize}
+      \item \texttt{cp-sat}: great at bounding and polishing objectives on a Boolean-heavy model; once the schedule skeleton is fixed, the branch-and-bound plus cutting logic gets to work quickly—hence optimality up to $n=14$.
+      \item \texttt{chuffed}: benefits from the same phase order because conflicts arise early on $W$; LCG learns “no-good weeks” patterns that prune big subtrees when moving to $Z$ and $B$.
+      \item \texttt{gecode}: competitive up to $n=12$, then runs out of steam without nogood learning; the same global structure helps, but no clause learning means more re-exploration.
+    \end{itemize}
+  \item \textbf{SB and Implied here:} In optimization, both SB and Implied usually help: fewer equivalent optima to wade through and tighter bounds (period-profile $C$, home-count balance) drive faster proof of optimality. Turning either off tends to delay the “prove optimal” step, especially for \texttt{chuffed}/\texttt{gecode}.
+\end{itemize}
 
-\textbf{Beyond $n=14$.} For $n\ge 16$ the optimization model returns no solution within the time cap for any solver, and the decision model becomes difficult for all but \texttt{cp-sat} (and only under certain variants). Scaling further would likely require heavier search control (restarts tuning, alternative VOHs) or hybrid search (e.g., LNS seeded by feasible CP solutions).
+\paragraph{Beyond $n=14$ (both models)}
+\begin{itemize}
+  \item \textbf{Why it gets sticky:} The number of pairs grows as $O(n^2)$ and the week-per-team \texttt{alldifferent} gets denser. Without stronger global reasoning or learning, the tree blows up.
+  \item \textbf{Practical scale-up knobs:}
+    \begin{itemize}
+      \item \texttt{cp-sat}: small LNS on $W$-blocks (freeze most weeks, re-optimise a sliding window) and a few randomized seeds; often yields quick improvements or proofs.
+      \item \texttt{chuffed}: larger restart budgets and activity-based VOH on $W$ to feed better nogoods; keep implied constraints on for stronger propagation.
+      \item \texttt{gecode}: consider a decomposition-by-weeks (solve week-by-week with consistency cuts) or switch to a hybrid (CP to schedule, ILP/SAT to orient).
+    \end{itemize}
+\end{itemize}
 
-\medskip
-\noindent\textit{Key takeaways.} (1) The staged search focused on $W$ is critical in optimization; (2) \texttt{cp-sat} is the most robust on feasibility; (3) implied constraints are beneficial overall for optimization (stronger propagation), but may slow down easy feasibility, especially for \texttt{chuffed}; (4) symmetry breaking improves consistency and interpretability, yet its ablation can occasionally help first-solution time in SAT-style search—tuning is solver-dependent.
+\paragraph{Key takeaways.}
+\begin{itemize}
+  \item Phasing on $(W \rightarrow Z \rightarrow B)$ is the real difference-maker for optimization.
+  \item \texttt{cp-sat} is the safest bet for feasibility on medium sizes and for proving optimality quickly up to $n=14$.
+  \item Implied constraints are a net positive for optimization (tighter bounds, better proofs), while on pure feasibility they can be overhead on easy cases—especially for \texttt{chuffed}.
+  \item Symmetry breaking generally helps, but leaving a bit of symmetry can make SAT-style engines stumble on a first solution faster; treat it as a solver-specific dial rather than a dogma.
+\end{itemize}
 
-\subsection{SAT Model}
+
+\section{SAT Model}
 
 We encode STS in propositional CNF using two families of literals. The solver interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export with MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from CNF generation (when applicable), and results are written under \texttt{res/SAT/\#}.json in the format required by the project (\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
 
