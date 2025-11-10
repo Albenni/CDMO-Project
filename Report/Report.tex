@@ -4,6 +4,7 @@
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage[backend=biber,style=numeric]{biblatex}
+\usepackage{float}
 \addbibresource{references.bib}
 
 \title{Project Title}
@@ -277,135 +278,180 @@ C_{1,1} = 1.
 \noindent This fixes team~1's unique single-use period to period~1, breaking the global permutation symmetry among periods without excluding non-equivalent schedules.
 \subsection{Validation}
 
-The goal of this section is to evaluate the behaviour of the two CP models (decision and optimization) under different solvers and modelling variants (with/without symmetry breaking, with/without implied constraints), reporting time and solution quality within a strict $300$ seconds cap. We report only sequential runs, and times are floored to integers.
+The purpose of this section is to compare the behaviour of the two CP models (decision and optimization) for different solvers and modelling variants (with/without symmetry breaking, with/without implied constraints), in terms of needed time to find the (optimal) solution, within a $300$ seconds limit.
 
 \subsubsection*{Experimental design}
 
-\textbf{Instances.} We tested even sizes $n\in\{8,10,12,14,16,18\}$ (decision: $n=4$ excluded by design).\\
-\textbf{Solvers.} MiniZinc back-ends: \texttt{cp-sat}, \texttt{chuffed}, \texttt{gecode}; timeout $300$ s per run.\\
-\textbf{Runner and data.} A Python wrapper sets $n$, runs the chosen MiniZinc model/solver, caps the recorded time at $300$ if not solved, and writes one JSON per instance under \texttt{res/CP/\{n\}.json}, merging approaches as distinct keys (e.g., \texttt{cp-sat\_dec}, \texttt{chuffed\_opt\_noSB}).\\
-\textbf{Approaches.} For each solver we consider: baseline (SB+Implied), \emph{noSB} (SB off, Implied on), \emph{noImplied} (SB on, Implied off).\\
-\textbf{Search strategies.} \emph{Optimization model:} staged search
+\hspace*{1.5em}\textbf{Instances.} We tested sizes $n\in\{8,10,12,14,16,18\}$.\\
+\hspace*{1.5em}\textbf{Solvers.} \texttt{cp-sat}, \texttt{chuffed}, \texttt{gecode}.\\
+\hspace*{1.5em}\textbf{Runner and data.} A Python wrapper sets $n$, runs the chosen MiniZinc model/solver, and writes one JSON per instance under \texttt{res/CP/\{n\}.json}, merging approaches as distinct keys (e.g., \texttt{cp-sat\_dec}, \texttt{chuffed\_opt\_noSB}).\\
+\hspace*{1.5em}\textbf{Approaches.} For each solver, we assess different approaches by enabling or disabling symmetry breaking (SB) and implied constraints (IC).\\
+\hspace*{1.5em}\textbf{Search strategies.}
+
+\noindent\emph{Optimization model.} \textit{Phased search (Trick’s schedule–then–break).}
+We separate the structural calendar from orientations and solve in three phases:
+\begin{itemize}
+  \item[(1)] fix the week of each pair $W$ (\emph{schedule});
+  \item[(2)] place pairs $Z$ within the chosen week (\emph{structural refinement});
+  \item[(3)] set orientations $B$ (\emph{break}).
+\end{itemize}
+This stratification follows Trick’s classic \emph{schedule–then–break} rationale for sports timetabling: first construct the weekly round-robin schedule ignoring home/away, then assign orientations to control breaks and fairness. In our CP setting, the idea is that the strongest propagation lives in the structural layer (e.g., team-wise \texttt{alldifferent} across weeks), so we commit those decisions early and defer the cheaper binary choices to the end. We implement the phases with a sequential search:
 \[
-\texttt{seq\_search}\Big(
-\underbrace{\texttt{int\_search}(W,\ \texttt{dom\_w\_deg},\ \texttt{indomain\_min})}_{\text{weeks first}},\
-\underbrace{\texttt{bool\_search}(Z,\ \texttt{first\_fail})}_{\text{pairs}},\
-\underbrace{\texttt{bool\_search}(B,\ \texttt{first\_fail})}_{\text{orientations}}
+\begin{aligned}
+\texttt{seq\_search}\Big(&
+\texttt{int\_search}(W,\ \texttt{dom\_w\_deg},\ \texttt{indomain\_min},\ \texttt{complete}),\\
+&\texttt{bool\_search}(Z,\ \texttt{first\_fail},\ \texttt{complete}),\\
+&\texttt{bool\_search}(B,\ \texttt{first\_fail},\ \texttt{complete})
 \Big).
+\end{aligned}
 \]
-\emph{Decision model:} solver defaults (no user-defined search).\\
-\textbf{Result format.} Decision tables report the runtime in seconds (if no answer within $300$ s, we write ``$>300$’’). Optimization tables report the best objective value found (bold if proven optimal; ``–'' if no solution within the time limit).
+Here, \texttt{dom\_w\_deg} (domain/weighted-degree) prioritises the most constrained/conflict-rich week decisions, while
+\texttt{first\_fail} applies a fail-first policy to the Boolean layers; this mirrors the two-phase schedule–then–break approach~\cite{TrickScheduleThenBreak}.
+
+\noindent\emph{Decision model.} Solver defaults (no user-defined search).
+
+\hspace*{1.5em}\textbf{Result format.} Decision tables report the runtime in seconds (if no answer within $300$ s, we write ``$>300$’’).
+Optimization tables report, for each entry, \emph{time / objective} (with the objective in \textbf{bold} if proven optimal).
+If no solution was obtained within the time limit, we write ``$>300\,/\,\text{--}$’’.
 
 \subsubsection*{Experimental results}
 
 All numbers below are directly taken from the produced JSON files in \texttt{res/CP}.
 
-\paragraph{Decision model — baseline (SB+Implied).}
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{lccc}
 \toprule
 $n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & 0    & 0     & 0     \\
-10 & 17   & >300  & 0     \\
-12 & 3    & >300  & >300  \\
-14 & 11   & >300  & >300  \\
-16 & >300 & >300  & >300  \\
-18 & >300 & >300  & >300  \\
+8  & 0      & 0       & 0     \\
+10 & 17     & $>300$  & 0     \\
+12 & 3      & $>300$  & $>300$  \\
+14 & 11     & $>300$  & $>300$  \\
+16 & $>300$ & $>300$  & $>300$  \\
+18 & $>300$ & $>300$  & $>300$  \\
 \bottomrule
 \end{tabular}
 \caption{Decision, baseline (SB+Implied).}
 \end{table}
 
-\paragraph{Decision model — SB ablation (noSB, Implied on).}
-\begin{table}[h]
-\centering
-\begin{tabular}{lccc}
-\toprule
-$n$ & CP-SAT (noSB) & Chuffed (noSB) & Gecode (noSB) \\
-\midrule
-8  & 0    & 0    & 0     \\
-10 & 3    & 0    & 80    \\
-12 & 75   & 7    & >300  \\
-14 & 200  & >300 & >300  \\
-16 & 131  & >300 & >300  \\
-18 & >300 & >300 & >300  \\
-\bottomrule
-\end{tabular}
-\caption{Decision, \emph{noSB}.}
-\end{table}
-
-\paragraph{Decision model — Implied ablation (noImplied, SB on).}
-\begin{table}[h]
-\centering
-\begin{tabular}{lccc}
-\toprule
-$n$ & CP-SAT (noImplied) & Chuffed (noImplied) & Gecode (noImplied) \\
-\midrule
-8  & 0    & 0    & 0     \\
-10 & 83   & 2    & 0     \\
-12 & 10   & 1    & >300  \\
-14 & 62   & 9    & >300  \\
-16 & 209  & >300 & >300  \\
-18 & >300 & >300 & >300  \\
-\bottomrule
-\end{tabular}
-\caption{Decision, \emph{noImplied}.}
-\end{table}
-
-\paragraph{Optimization model — baseline (SB+Implied).}
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{lccc}
 \toprule
 $n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & \textbf{8}  & \textbf{8}  & \textbf{8}  \\
-10 & \textbf{10} & \textbf{10} & \textbf{10} \\
-12 & \textbf{12} & \textbf{12} & \textbf{12} \\
-14 & \textbf{14} & \textbf{14} & – \\
-16 & – & – & – \\
-18 & – & – & – \\
+8  & 0      & 0      & 0     \\
+10 & 3      & 0      & 80    \\
+12 & 75     & 7      & $>300$  \\
+14 & 200    & $>300$ & $>300$  \\
+16 & 131    & $>300$ & $>300$  \\
+18 & $>300$ & $>300$ & $>300$  \\
 \bottomrule
 \end{tabular}
-\caption{Optimization, baseline: best objective (bold if proven optimal).}
+\caption{Decision, \emph{noSB}.}
 \end{table}
 
-\paragraph{Optimization model — SB ablation (noSB, Implied on).}
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{lccc}
 \toprule
-$n$ & CP-SAT (noSB) & Chuffed (noSB) & Gecode (noSB) \\
+$n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & \textbf{8}  & \textbf{8}  & \textbf{8} \\
-10 & \textbf{10} & \textbf{10} & \textbf{10} \\
-12 & \textbf{12} & \textbf{12} & – \\
-14 & \textbf{14} & \textbf{14} & – \\
-16 & – & – & – \\
-18 & – & – & – \\
+8  & 0      & 0      & 0     \\
+10 & 83     & 2      & 0     \\
+12 & 10     & 1      & $>300$  \\
+14 & 62     & 9      & $>300$  \\
+16 & 209    & $>300$ & $>300$  \\
+18 & $>300$ & $>300$ & $>300$  \\
 \bottomrule
 \end{tabular}
-\caption{Optimization, \emph{noSB}: best objective (bold if proven optimal).}
+\caption{Decision, \emph{noImplied}.}
 \end{table}
 
-\paragraph{Optimization model — Implied ablation (noImplied, SB on).}
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \begin{tabular}{lccc}
 \toprule
-$n$ & CP-SAT (noImplied) & Chuffed (noImplied) & Gecode (noImplied) \\
+$n$ & CP-SAT & Chuffed & Gecode \\
 \midrule
-8  & \textbf{8}  & \textbf{8}  & \textbf{8} \\
-10 & \textbf{10} & \textbf{10} & – \\
-12 & \textbf{12} & – & – \\
-14 & \textbf{14} & – & – \\
-16 & – & – & – \\
-18 & – & – & – \\
+8  & 0      & 0      & 0     \\
+10 & 3      & 0      & $>300$  \\
+12 & 70     & 1      & $>300$  \\
+14 & 227    & $>300$ & $>300$  \\
+16 & 223    & $>300$ & $>300$  \\
+18 & $>300$ & $>300$ & $>300$  \\
 \bottomrule
 \end{tabular}
-\caption{Optimization, \emph{noImplied}: best objective (bold if proven optimal).}
+\caption{Decision, \emph{noImplied, noSB}.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT & Chuffed & Gecode \\
+\midrule
+8  & 0 / \textbf{8}   & 0 / \textbf{8}   & 0 / \textbf{8}   \\
+10 & 2 / \textbf{10}  & 1 / \textbf{10}  & 0 / \textbf{10}  \\
+12 & 7 / \textbf{12}  & 2 / \textbf{12}  & 77 / \textbf{12} \\
+14 & 28 / \textbf{14} & 47 / \textbf{14} & $>300$ / --        \\
+16 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
+18 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, baseline.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT & Chuffed & Gecode \\
+\midrule
+8  & 1 / \textbf{8}   & 1 / \textbf{8}   & 0 / \textbf{8}   \\
+10 & 2 / \textbf{10}  & 0 / \textbf{10}  & 0 / \textbf{10}  \\
+12 & 9 / \textbf{12}  & 2 / \textbf{12}  & $>300$ / --        \\
+14 & 168 / \textbf{14}& 14 / \textbf{14} & $>300$ / --        \\
+16 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
+18 & $>300$ / --      & $>300$ / --      & $>300$ / --        \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, \emph{noSB}.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT & Chuffed & Gecode \\
+\midrule
+8  & 0 / \textbf{8}   & 0 / \textbf{8}   & 19 / \textbf{8} \\
+10 & 2 / \textbf{10}  & 3 / \textbf{10}  & $>300$ / --       \\
+12 & 8 / \textbf{12}  & $>300$ / --      & $>300$ / --       \\
+14 & 46 / \textbf{14} & $>300$ / --      & $>300$ / --       \\
+16 & $>300$ / --      & $>300$ / --      & $>300$ / --       \\
+18 & $>300$ / --      & $>300$ / --      & $>300$ / --       \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, \emph{noImplied}.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+$n$ & CP-SAT & Chuffed & Gecode \\
+\midrule
+8  & 1 / \textbf{8}   & 1 / \textbf{8}   & 275 / \textbf{8}\\
+10 & 3 / \textbf{10}  & 66 / \textbf{10} & $>300$ / --       \\
+12 & 10 / \textbf{12} & $>300$ / --      & $>300$ / --       \\
+14 & 188/ \textbf{14} & $>300$ / --      & $>300$ / --       \\
+16 & $>300$ / --      & $>300$ / --      & $>300$ / --       \\
+18 & $>300$ / --      & $>300$ / --      & $>300$ / --       \\
+\bottomrule
+\end{tabular}
+\caption{Optimization, \emph{noImplied, noSB}.}
 \end{table}
 
 \subsubsection*{Discussion}
