@@ -494,21 +494,36 @@ $n$ & CP-SAT & Chuffed & Gecode                              \\
 \end{itemize}
 
 
+
 \section{SAT Model}
 
 We encode STS in propositional CNF using two families of literals. The solver interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export with MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from CNF generation (when applicable), and results are written under \texttt{res/SAT/\#}.json in the format required by the project (\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
+
+\subsection{Decision variables}
 
 \paragraph{Indexing.}
 Let $n$ be even. We use \emph{Teams} $=\{1,\dots,n\}$, \emph{Weeks} $=\{1,\dots,n-1\}$, and \emph{Periods} $=\{1,\dots,n/2\}$. A schedule is an $(n/2)\times(n-1)$ matrix whose entry $(p,w)$ holds exactly one oriented match $(i,j)$ with $i$ at home and $j$ away.
 
 \subsubsection*{Decision variables (literals)}
 \begin{itemize}
-\item \textbf{Placement with orientation} $X_{i,j,w,p}$ (Boolean): true iff the match ``$i$ vs.\ $j$'' is played in week $w$, period $p$, with $i$ at home (ordered pair, $i\ne j$). This is the authoritative view of the schedule.
+\item \textbf{Placement with orientation} $X_{i,j,w,p}$ (Boolean): true iff the match between $i$ and $j$ is played in week $w$, period $p$, with $i$ at home (ordered pair, $i\ne j$). This is the authoritative view of the schedule.
 \item \textbf{Slot occupancy} $Y_{t,w,p}$ (Boolean): true iff team $t$ occupies slot $(w,p)$. These literals are channeled to $X$ locally (one opponent per team per week).
 \end{itemize}
 
 \paragraph{Cardinality encodings.}
 We generate CNF for AtMost/ExactlyOne using adaptive encodings: pairwise for $\text{AtMost}(k\!=\!1)$ on small scopes, ladder otherwise; for larger scopes we optionally use \texttt{cardnetwrk}; sequential counters are the default fall-back. This balances clause/auxiliary-variable overhead and propagation strength.
+
+\subsection{Objective function}
+
+\subsubsection*{Optimization in SAT (fairness)}
+We minimize the maximum home/away imbalance
+\[
+d^\star \;=\; \min\, d \quad\text{s.t.}\quad \Big\lceil \tfrac{T-d}{2} \Big\rceil \ \le\ \text{home}_i\ \le\ \Big\lfloor \tfrac{T+d}{2} \Big\rfloor\quad\forall i,
+\]
+where $T=n\!-\!1$ and $\text{home}_i=\sum_{j\ne i,w,p} X_{i,j,w,p}$. We solve this by \emph{incremental} SAT on $d=1,2,\dots,T$ (parity gives $d\ge 1$): for a fixed $d$ we add team-wise upper/lower cardinality constraints on the \emph{home} literals of each team and test satisfiability. The first satisfiable $d$ is optimal. For Z3 we push/pop AtMost/AtLeast constraints; for PySAT we export the base CNF once and then call the solver with the extra fairness clauses.
+
+
+\subsection{Constraints}
 
 \subsubsection*{Constraints (decision model)}
 All constraints are posted in CNF against $X$ and $Y$.
@@ -540,13 +555,6 @@ For each team $t$ and period $p$, $\sum_w Y_{t,w,p}\le 2$.
 \paragraph{Extra symmetry breaking (toggle).}
 When enabled, week~1 is fixed at period granularity (pair $\,(i,n\!+\!1\!-\!i)\,$ plays in period $i$) and the match $(1,n)$ is oriented as home for team 1 in $(w,p)=(1,1)$. This removes residual week/period symmetries and follows the modelling advice on symmetry breaking for Round Robin-style encodings~\cite{martins-impact-sat-modelling}.
 
-\subsubsection*{Optimization in SAT (fairness)}
-We minimize the maximum home/away imbalance
-\[
-d^\star \;=\; \min\, d \quad\text{s.t.}\quad \Big\lceil \tfrac{T-d}{2} \Big\rceil \ \le\ \text{home}_i\ \le\ \Big\lfloor \tfrac{T+d}{2} \Big\rfloor\quad\forall i,
-\]
-where $T=n\!-\!1$ and $\text{home}_i=\sum_{j\ne i,w,p} X_{i,j,w,p}$. We solve this by \emph{incremental} SAT on $d=1,2,\dots,T$ (parity gives $d\ge 1$): for a fixed $d$ we add team-wise upper/lower cardinality constraints on the \emph{home} literals of each team and test satisfiability. The first satisfiable $d$ is optimal. For Z3 we push/pop AtMost/AtLeast constraints; for PySAT we export the base CNF once and then call the solver with the extra fairness clauses.
-
 \subsubsection*{Solvers and interfaces}
 \textbf{Z3.} We declare Boolean atoms $v_1,\dots,v_{V}$ and post each CNF clause as a Z3 disjunction; the $300$s limit is passed as a per-call timeout in milliseconds.
 \textbf{PySAT backends.} We export CNF to DIMACS (\texttt{pysat.formula.CNF.to\_file}) and run the selected solver with a hard timeout using \texttt{solve\_limited} plus a watchdog \texttt{interrupt}; for optimization we reuse the same DIMACS and add per-$d$ fairness clauses. All solvers are used sequentially, as required.
@@ -556,6 +564,8 @@ A satisfying assignment is decoded into an $(n/2)\times(n-1)$ matrix of pairs \t
 
 \paragraph{Why these modelling choices?}
 Symmetry breaking and encoding selection strongly affect SAT performance; we deliberately (i) fix a canonical week assignment via the circle method, (ii) keep local $X\!\leftrightarrow\!Y$ channels to obtain short clauses, and (iii) adapt cardinality encodings to scope/threshold. These choices are consistent with the recommendations on the impact of modelling (and symmetry breaking) in SAT problem solving~\cite{martins-impact-sat-modelling}.
+
+\subsection{Validation}
 
 \subsubsection*{Validation setup}
 We follow the project rules: $300$s global limit including any pre-solving/printing; solvers run on a single core; and Z3 is mandatory while PySAT+DIMACS enables solver-independence. We report decision runtimes and, for optimization, the (best) objective value found within the limit; unsolved cases are marked with time $=300$ and \texttt{optimal=false}.
@@ -604,48 +614,7 @@ $n=18$ & 107\,(\checkmark) & 300 & 300 & 300 & 300 & 300 \\
 Each approach/run is saved as a distinct key in \texttt{res/SAT/\#}.json; the $(n/2)\times(n-1)$ \texttt{sol} matrix is reconstructed from true $X$ atoms. Time accounting includes DIMACS generation for PySAT runs, and all unsolved runs are normalized to \texttt{time=300} with \texttt{optimal=false}, exactly as prescribed.
 
 \subsubsection*{Limitations and future work}
-The circle-method week fixing is a strong SB that discards alternative week assignments; exploring weaker SBs or dynamic SB learning may further help CDCL solvers. Also, swapping AtMost encodings per scope/threshold already paid off; a systematic sensitivity study of encodings vs.\ solver/instance size would align with best practices in SAT modelling.
-
-
-\section{SAT Model}
-
-This part is mandatory for groups of 4 students. Groups up to 3 students can choose between SAT and SMT, and will be given bonus points if they do both.
-
-\subsection{Decision variables}
-
-Describe all the literals of your model and their semantics. For example, $\Delta_{i,j} = \text{true}$ iff the driver goes from city $i$ to city $j$.
-
-\subsection{Objective function}
-
-See Section~2.2. Explain how you managed to do optimization in SAT.
-
-\subsection{Constraints}
-
-Describe all the clauses of your model and their semantics. In particular, describe the encoding(s) that you used. Follow the indications given in Section~2.3 for main problem constraints, implied constraints, and symmetry breaking constraints.
-
-\subsection{Validation}
-
-See Section~2.4. The model must be implemented using at least Z3. Bonus points will be considered if a solver-independent language (e.g., Dimacs) is employed so as to play with different SAT solvers on the same model.
-
-\section{SMT Model}
-
-This part is mandatory for groups of 4 students. Groups up to 3 students can choose between SAT and SMT, and will be given bonus points if they do both.
-
-\subsection{Decision variables}
-
-See Section~2.1. Specify the sort of each variable and the theory used.
-
-\subsection{Objective function}
-
-See Section~2.2.
-
-\subsection{Constraints}
-
-See Section~2.3.
-
-\subsection{Validation}
-
-See Section~2.4. The model must be implemented using at least Z3 or CVC5. Bonus points will be considered if a solver-independent language (e.g., SMT-LIB) is employed so as to play with different SMT solvers on the same model.
+The circle-method week fixing is a strong SB that discards alternative week assignments; exploring weaker SBs or dynamic SB learning may further help CDCL
 
 \section{MIP Model}
 

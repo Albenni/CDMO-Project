@@ -18,7 +18,7 @@ TIME_LIMIT_SEC = 300
 
 def _parse_sym_flag(argv):
     """
-    Restituisce (extra_symmetry: bool) in base a un eventuale terzo argomento.
+    Return (extra_symmetry: bool) based on an optional third argument.
     Default: True.
     """
     if len(argv) < 4:
