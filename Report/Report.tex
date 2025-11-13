@@ -5,6 +5,7 @@
 \usepackage{hyperref}
 \usepackage[backend=biber,style=numeric]{biblatex}
 \usepackage{float}
+\usepackage{bm}
 \addbibresource{references.bib}
 
 \title{Project Title}
@@ -29,81 +30,179 @@ The report should be written in \LaTeX{} using \verb|\documentclass{article}| wi
 You do not need to introduce the problem, nor the optimization methods that you are using to tackle the problem. After a proper introduction to your report, describe and formalize what is common to all the models (such as input parameters, the objective variable and its bounds, pre-processing steps, \dots). Refer to this section where necessary instead of copying and pasting text in the following sections.
 
 \section{CP Model}
+\label{sec:cp-model}
 
-We model Sports Tournament Scheduling with two MiniZinc variants: a \emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization} model (\texttt{sts\_opt.mzn}). Both use
+We model Sports Tournament Scheduling with two MiniZinc variants: a
+\emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization}
+model (\texttt{sts\_opt.mzn}). Both use
 \[
-\text{Teams}=\{1,\dots,n\}\ (n\ \text{even}),\quad
-\text{Weeks}=\{1,\dots,n-1\},\quad
-\text{Periods}=\{1,\dots,n/2\}.
+  \text{Teams} = \{1,\dots,n\},\quad
+  \text{Weeks} = \{1,\dots,n-1\},\quad
+  \text{Periods} = \{1,\dots,n/2\}.
 \]
-Because of the period–load cap (at most two uses of the same period per team), the decision model excludes $n=4$. Iverson brackets $[\,\cdot\,]$ denote Boolean$\to$integer casts.
+In this project we consider instances with an even number of teams; moreover,
+the period–usage specification makes the case $n=4$ infeasible, so it is
+excluded.
+
+\noindent\textit{Notation.} Iverson brackets $[\,\cdot\,]$ denote Boolean$\to$integer casts.
 
 \subsection{Decision variables}
+\label{subsec:cp-vars}
 
-\paragraph{Decision model.}
+\paragraph{Decision model}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item \textbf{Placement $Z$:} $Z_{w,p,i,j}\in\{0,1\}$ indicates whether the unordered pair $\{i,j\}$ ($i<j$) is scheduled in slot $(w,p)$; this is the authoritative view of the timetable.
-  \item \textbf{Occupancy $U$:} $U_{w,p,t}\in\{0,1\}$ marks whether team $t$ plays in $(w,p)$; it is linked to $Z$ so weekly and per–period counts are expressed directly.
-  \item \textbf{Output $(H,A)$:} period$\times$week matrices required by the checker, derived from the internal variables.
-  \item \textbf{Optional $C$:} if the exact per–period profile is enabled also in the decision model, $C_{t,p}\in\{1,2\}$ counts uses of period $p$ by team $t$.
+  \item \textbf{\(\bm{Z}\) (match-at-slot indicator):}
+        \(Z_{w,p,i,j}\in\{0,1\}\) indicates whether the unordered pair
+        \(\{i,j\}\) (\(i<j\)) is scheduled in slot \((w,p)\); this is the
+        authoritative timetable view.
+  \item \textbf{\(\bm{U}\) (team-at-slot indicator):}
+        \(U_{w,p,t}\in\{0,1\}\) marks whether team \(t\) plays in \((w,p)\);
+        it is linked to \(Z\) so weekly and per–period counts are stated
+        directly.
+  \item \textbf{\(\bm{H},\bm{A}\) (output matrices):}
+        Period\(\times\)week arrays required by the checker, derived from the
+        internal variables.
+  \item \textbf{\(\bm{C}\) (exact per–period profile, see
+        \emph{Implied constraints}):}
+        \(C_{t,p}\in\{1,2\}\) counts the uses of period \(p\) by team \(t\).
 \end{itemize}
 
-\paragraph{Optimization model.}
+\paragraph{Optimization model}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item \textbf{Weeks $W$:} $W_{i,j}\in\text{Weeks}$ (for $i<j$) is the week of pair $\{i,j\}$; channeled to $Z$ and used in team-wise \texttt{alldifferent}.
-  \item \textbf{Orientation $B$:} $B_{i,j}\in\{0,1\}$ chooses home/away for $\{i,j\}$.
-  \item \textbf{Period profile $C$:} $C_{t,p}\in\{1,2\}$ with $\sum_p C_{t,p}=n-1$ and exactly one $p$ with $C_{t,p}=1$; posted for stronger filtering.
-  \item \textbf{Fairness summaries:} $Hc_t$ (homes of $t$), $\mathrm{dev}_t$ (absolute imbalance), and \textbf{objective} $\mathrm{obj}=\sum_t \mathrm{dev}_t$.
+  \item \(\bm{Z},\ \bm{U},\ (\bm{H},\bm{A}),\ \bm{C}\) (as above).
+  \item \textbf{\(\bm{W}\) (pair–to–week mapping):}
+        \(W_{i,j}\in\text{Weeks}\) for \(i<j\) records in which week the match
+        \(\{i,j\}\) is played.
+  \item \textbf{\(\bm{B}\) (orientation flag):}
+        \(B_{i,j}\in\{0,1\}\) for \(i<j\) selects the home/away direction for
+        the pair \(\{i,j\}\).
+  \item \textbf{\(\bm{Hc},\ \bm{\mathrm{dev}},\ \mathrm{obj}\) (fairness
+        counters and objective):}
+        \(Hc_t\) is the number of home matches of team \(t\);
+        \(\mathrm{dev}_t\) is the absolute deviation of team \(t\) from a
+        perfectly balanced split; the objective
+        \(\mathrm{obj}=\sum_{t}\mathrm{dev}_t\) aggregates the team-wise
+        imbalances and is minimized.
 \end{itemize}
 
 \subsection{Objective function}
+\label{subsec:cp-objective}
 
-Decision: \texttt{solve satisfy}. Optimization: minimize total imbalance,
+We minimize the total home/away imbalance across teams:
 \[
-\min\ \mathrm{obj}=\sum_t \mathrm{dev}_t,
+  \min\ \mathrm{obj} = \sum_{t\in\text{Teams}} \mathrm{dev}_t,
 \]
-with $\mathrm{dev}_t$ the linearized absolute deviation from $(n-1)/2$ homes. Two tightenings are posted: global home balance $\sum_t Hc_t=\tfrac{n(n-1)}{2}$ and bounds $n\le \mathrm{obj}\le 2n$ (even $n$).
+where \(\mathrm{dev}_t\) is the absolute difference between team \(t\)'s number
+of home games and the ideal split \((n-1)/2\). Since each team plays \(n-1\)
+matches (odd), the smallest per–team imbalance is \(1\); accordingly, we post
+the pruning bounds
+\[
+  n \ \le\ \mathrm{obj}\ \le\ 2n,
+\]
+which tighten search without restricting feasibility.
 
 \subsection{Constraints}
+\label{subsec:cp-constraints}
 
-\paragraph{Core constraints (both models, $Z$/$U$).}
+\paragraph{Core constraints (both models, \(Z/U\))}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item one match per slot $(w,p)$; each unordered pair appears once;
-  \item each team plays exactly once per week;
-  \item period cap: a team uses any fixed period at most twice (in the optimization model this is strengthened by the exact profile via $C$).
+  \item \textbf{One match per slot:}
+        \(\forall w,p:\ \sum_{i<j} Z_{w,p,i,j}=1\).
+  \item \textbf{Each unordered pair once:}
+        \(\forall i<j:\ \sum_{w,p} Z_{w,p,i,j}=1\).
+  \item \textbf{Weekly participation:}
+        \(\forall w,t:\ \sum_{p} U_{w,p,t}=1\).
+  \item \textbf{Period cap:}
+        \(\forall t,p:\ \sum_{w} U_{w,p,t}\le 2\).
 \end{itemize}
 
-\paragraph{Channeling.}
+\paragraph{Index conventions (unordered pairs)}
+We encode each unordered pair only once and disable meaningless entries:
+\[
+  \forall\,w,p,\ \forall\,i\ge j:\quad Z_{w,p,i,j}=0,
+\]
+\[
+  \text{(optimization)}\qquad
+  \forall\,i\ge j:\quad B_{i,j}=0,\quad W_{i,j}=1.
+\]
+These fixed cells are never ranged over (all sums use \(i<j\)); they simply
+prevent spurious variables from appearing in the arrays.
+
+\paragraph{Channeling}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item $U\leftrightarrow Z$: occupancy equals left/right appearance in $Z$;
-  \item $W\leftrightarrow Z$ (optimization): $[W_{i,j}=w]=\sum_p Z_{w,p,i,j}$;
-  \item $(H,A)$ are built once from the internal placement/orientation.
+  \item \textbf{\(U\leftrightarrow Z\):}
+        \(\forall w,p,t:\ 
+          U_{w,p,t}=\sum_{j>t} Z_{w,p,t,j}+\sum_{i<t} Z_{w,p,i,t}\).
+  \item \textbf{\(W\leftrightarrow Z\) (optimization):}
+        \(\forall i<j,\forall w:\ 
+          [\,W_{i,j}=w\,]=\sum_{p} Z_{w,p,i,j}\).
+  \item \textbf{Canonical output in the decision model:} \\
+        \(\forall w,p:\ 
+          H_{p,w}=\sum_{i<j}Z_{w,p,i,j}\,i,\quad
+          A_{p,w}=\sum_{i<j}Z_{w,p,i,j}\,j\).
+  \item \textbf{Output \((H,A)\) from placement/orientation (optimization):}\\
+        \(\forall w,p:\ 
+          H_{p,w}=\sum_{i<j} Z_{w,p,i,j}\big(i\,B_{i,j}+j(1-B_{i,j})\big),\\
+          A_{p,w}=\sum_{i<j} Z_{w,p,i,j}\big(j\,B_{i,j}+i(1-B_{i,j})\big).\)
 \end{itemize}
 
-\paragraph{Implied constraints.}
+\paragraph{Implied constraints}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item exact per–team period profile $C$ (one period used once, all others twice);
-  \item \texttt{alldifferent} on the $n{-}1$ weeks incident to each team (optimization);
-  \item global home-count balance and objective bounds (optimization).
+  \item \textbf{Exact per–team period profile \(C\):}
+        \(\forall t,p:\ C_{t,p}=\sum_{w} U_{w,p,t}\), and
+        \(\forall t:\ \sum_{p} C_{t,p}=n-1,\ 
+          \sum_{p}[\,C_{t,p}=1\,]=1\).
+  \item \textbf{Distinct weeks per team (optimization):}\\
+        \(\forall t:\ 
+          \texttt{alldifferent}\big([\,W_{\min(t,j),\max(t,j)}\mid j\neq t\,]\big)\)
+        (strong global filtering, as recommended by~\cite{HenzMullerThiel2004}).
+  \item \textbf{Global home–count (optimization):}
+        \(Hc_t=\sum_{j>t}B_{t,j}+\sum_{i<t}(1-B_{i,t})\) and
+        \(\sum_{t} Hc_t=\tfrac{n(n-1)}{2}\).
 \end{itemize}
 
-\paragraph{Symmetry breaking.}
+\paragraph{Symmetry breaking}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item Week~1 canonical pairing $(1,2),(3,4),\dots,(n-1,n)$ (both models);
-  \item Week~1 orientation $B_{2p-1,2p}=\texttt{true}$ (optimization);
-  \item canonical $(H,A)$ in the decision model (lower id home, higher away);
-  \item single-use period anchor $C_{1,1}=1$ (optimization).
+  \item \textbf{Week~1 canonical pairing (both):}
+        \(\forall p:\ Z_{1,p,\,2p-1,\,2p}=\texttt{true}\).
+  \item \textbf{Week~1 orientation (optimization):}
+        \(\forall p:\ B_{2p-1,\,2p}=\texttt{true}\).
+  \item \textbf{Single-use period anchor (optimization):}
+        \(C_{1,1}=1\).
 \end{itemize}
 
 \subsection{Validation}
+\label{subsec:cp-validation}
 
-\paragraph{Setup.}
-\textbf{Instances:} $n\in\{8,10,12,14,16,18\}$. \textbf{Solvers:} \texttt{cp-sat}, \texttt{chuffed}, \texttt{gecode}. \textbf{Time cap:} $300$\,s. \textbf{Approaches:} SB on/off; Implied (IC) on/off. \textbf{Search (optimization only):} phased order $W\!\rightarrow\!Z\!\rightarrow\!B$ (schedule–then–break~\cite{TrickScheduleThenBreak}). \textbf{Format:} decision tables show seconds (\(>300\) if none); optimization shows \emph{time/objective} (objective in \textbf{bold} if proven optimal; \(>300/\text{--}\) if none).
+\paragraph{Setup}
+\begin{itemize}\setlength{\itemsep}{2pt}
+  \item \textbf{Instances:} \(n\in\{8,10,12,14,16,18\}\).
+  \item \textbf{Solvers:} \texttt{cp-sat}, \texttt{chuffed}, \texttt{gecode}.
+  \item \textbf{Time cap:} \(300\) s per run.
+  \item \textbf{Approaches:} symmetry breaking (SB) on/off; implied
+        constraints (IC) on/off.
+  \item \textbf{Search (optimization only):}
+        staged search inspired by Trick’s \emph{schedule–then–break}%
+        ~\cite{TrickScheduleThenBreak}.
+        We separate \emph{structure} from \emph{orientation} and execute
+        phases sequentially (no interleaving):\\
+        (i) decide the week of each match \(W\) first---this exposes the
+        round-robin structure and lets strong globals prune early;\\
+        (ii) refine in-week placements \(Z\) once week domains are tight;\\
+        (iii) assign home/away \(B\) last, as it chiefly affects fairness.\\
+        Heuristics: weighted degree on \(W\) to surface difficult week
+        choices; fail-first on the Boolean layers (\(Z,B\)).
+  \item \textbf{Result format:}
+        decision tables report runtime in seconds (\(>300\) if no answer);
+        optimization tables report \emph{time/objective} (objective in
+        \textbf{bold} if proven optimal; \(>300/\text{--}\) if no solution).
+\end{itemize}
 
-\paragraph{Decision model.} Baseline (SB+IC) vs noSB (left), noIC vs noIC+noSB (right).
+\paragraph{Experimental results: Decision model}
+\mbox{}\par\vspace{0.5em}
 \begin{table}[H]\centering\small
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & 0 & 0 & 0\\
 10 & 17 & \(>300\) & 0\\
@@ -112,10 +211,10 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & \(>300\) & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
-\caption*{Baseline (SB+IC)}
+\caption{Baseline (SB+IC)}
 \end{minipage}\hfill
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & 0 & 0 & 0\\
 10 & 3 & 0 & 80\\
@@ -124,13 +223,13 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & 131 & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
-\caption*{noSB (IC on)}
+\caption{noSB (IC on)}
 \end{minipage}
 \end{table}
 
 \begin{table}[H]\centering\small
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & 0 & 0 & 0\\
 10 & 83 & 2 & 0\\
@@ -139,10 +238,10 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & 209 & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
-\caption*{noIC (SB on)}
+\caption{noIC (SB on)}
 \end{minipage}\hfill
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & 0 & 0 & 0\\
 10 & 3 & 0 & \(>300\)\\
@@ -151,14 +250,15 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & 223 & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
-\caption*{noIC + noSB}
+\caption{noIC + noSB}
 \end{minipage}
 \end{table}
 
-\paragraph{Optimization model.} Baseline (SB+IC) vs noSB (left), noIC vs noIC+noSB (right).
+\paragraph{Experimental results: Optimization model}
+\mbox{}\par\vspace{0.5em}
 \begin{table}[H]\centering\small
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & $0/\mathbf{8}$ & $0/\mathbf{8}$ & $0/\mathbf{8}$\\
 10 & $2/\mathbf{10}$ & $1/\mathbf{10}$ & $0/\mathbf{10}$\\
@@ -167,10 +267,10 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
-\caption*{Baseline (SB+IC)}
+\caption{Baseline (SB+IC)}
 \end{minipage}\hfill
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & $1/\mathbf{8}$ & $1/\mathbf{8}$ & $0/\mathbf{8}$\\
 10 & $2/\mathbf{10}$ & $0/\mathbf{10}$ & $0/\mathbf{10}$\\
@@ -179,13 +279,13 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
-\caption*{noSB (IC on)}
+\caption{noSB (IC on)}
 \end{minipage}
 \end{table}
 
 \begin{table}[H]\centering\small
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & $0/\mathbf{8}$ & $0/\mathbf{8}$ & $19/\mathbf{8}$\\
 10 & $2/\mathbf{10}$ & $3/\mathbf{10}$ & \(>300/\text{--}\)\\
@@ -194,10 +294,10 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
-\caption*{noIC (SB on)}
+\caption{noIC (SB on)}
 \end{minipage}\hfill
 \begin{minipage}{.48\textwidth}\centering
-\begin{tabular}{lccc}\toprule
+\begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 8 & $1/\mathbf{8}$ & $1/\mathbf{8}$ & $275/\mathbf{8}$\\
 10 & $3/\mathbf{10}$ & $66/\mathbf{10}$ & \(>300/\text{--}\)\\
@@ -206,16 +306,33 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
-\caption*{noIC + noSB}
+\caption{noIC + noSB}
 \end{minipage}
 \end{table}
 
-\paragraph{Discussion (concise).}
+\paragraph{Discussion.}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item \textbf{Decision:} with SB+IC, \texttt{cp-sat} remains reliable past $n{=}12$; \texttt{chuffed}/\texttt{gecode} often time out beyond $n{=}10$. SB reduces equivalences and helps CP-style search; IC can be overhead on easy feasibility but becomes useful as instances harden.
-  \item \textbf{Optimization:} the phased order $W\!\rightarrow\!Z\!\rightarrow\!B$ is effective: \texttt{cp-sat}/\texttt{chuffed} prove optimality up to $n{=}14$, \texttt{gecode} up to $n{=}12$. Here SB+IC typically help by shrinking equivalent optima and tightening bounds (profile $C$, home balance).
-  \item \textbf{Large sizes:} for $n{\ge}16$ most runs hit the time cap; further scale likely needs stronger search control (restarts/VOH tuning), light LNS on $W$, or hybridisation.
+  \item \textbf{Decision.}
+        In the decision version, runs without IC and/or SB often finish sooner
+        than the full model with all extras: this task rewards fast steps over
+        heavy reasoning. IC adds more checks at each step, and SB can remove
+        symmetric solutions that a SAT-based solver might otherwise find quickly.
+  \item \textbf{Optimization.}
+        With the staged order \(W\rightarrow Z\rightarrow B\), SB and IC help a
+        lot: the “weeks all different” and the period-profile constraints narrow
+        domains before orientations are chosen, and symmetry breaking removes
+        duplicate optimal schedules. Together these effects reduce the work needed
+        to prove optimality.
+  \item \textbf{Solver contrast.}
+        \texttt{cp-sat} is usually the most reliable. Our formulation has large
+        Boolean parts (\(Z,U,B\)) with simple linear sums, which fit SAT-based
+        solvers that learn from conflicts. This often does better than pure
+        finite-domain propagation when the goal is to get a quick solution.
 \end{itemize}
+
+
+
+
 
 
 
