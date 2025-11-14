@@ -472,13 +472,16 @@ $n=18$ & \textbf{1}\, & - & - & - & - & - \\
 \end{table}
 
 \noindent
-\textbf{Observations.} (i) For $n=16$, PySAT with no SB is extremely fast (MiniSAT\,22 in $4$–$6$s), while Glucose\,3 still times out on the optimization variant; (ii) for $n=18$ only Z3 solved both decision and optimization within the limit; (iii) enabling the extra week-1 symmetry sometimes \emph{hurts} CDCL (e.g., MiniSAT\,22 at $n=16$), consistent with known interactions between SB clauses and branching heuristics.
 
-\subsubsection*{Reproducibility and outputs}
-Each approach/run is saved as a distinct key in \texttt{res/SAT/\#}.json; the $(n/2)\times(n-1)$ \texttt{sol} matrix is reconstructed from true $X$ atoms. Time accounting includes DIMACS generation for PySAT runs, and all unsolved runs are normalized to \texttt{time=300} with \texttt{optimal=false}, exactly as prescribed.
+\paragraph{Observations.}
+(i) For $n=16$, the PySAT back-end without extra symmetry breaking (SB) is very fast on the \emph{decision} variant with \textsc{MiniSAT22} (4--6s), whereas \textsc{Glucose3} still times out on the \emph{optimization} variant. A plausible cause is our pipeline: the base CNF is exported once, but optimization tests multiple values of $d$ by spawning a fresh CDCL instance and adding fairness clauses each time (no reuse of learned clauses across $d$), which penalizes solvers more sensitive to restart/learning policies.
 
-\subsubsection*{Limitations and future work}
-The circle-method week fixing is a strong SB that discards alternative week assignments; exploring weaker SBs or dynamic SB learning may further help CDCL
+(ii) For $n=18$, only \textsc{Z3} solved both decision and optimization within the cap. This matches the fact that Z3 runs in-memory and incrementally: we assert the base CNF once and then push/pop only the fairness bounds (no DIMACS I/O, no solver re-initialization across $d$), which reduces overhead and preserves search state across the $d$-loop.
+
+(iii) Enabling the extra week-1 symmetry sometimes hurts CDCL (e.g., \textsc{MiniSAT22} at $n=16$). This is consistent with known interactions between added SB clauses and branching heuristics: extra structure can constrain the search but also disturb variable activities, worsening the decision order.\cite{martins-impact-sat-modelling}
+
+(iv) Overall, on our model the in-memory incremental path favors \textsc{Z3} as $n$ grows (fewer restarts-from-scratch and cheaper posting of fairness), while the DIMACS+CNF cardinalities in the PySAT path favor \textsc{MiniSAT22} over \textsc{Glucose3} at $n=16$ but degrade under repeated reboots in the optimization loop.
+
 
 \section{MIP Model}
 
