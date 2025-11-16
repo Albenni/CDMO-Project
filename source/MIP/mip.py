@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import argparse
 import json
 import math
@@ -112,13 +109,11 @@ def build_stageA_model(n, weeks_pairs, use_symmetry_breaking=True):
     m.OneMatchPerSlot = Constraint(m.W, m.P, rule=one_match_per_slot)
 
     # 3) period cap: each team appears in the same period at most twice over the tournament
-    #    *** FIX: somma solo sulle tuple (a,b,w) esistenti in m.EW che coinvolgono i ***
     def period_cap(m, i, p):
         return sum(m.x[(a, b, w), p] for (a, b, w) in m.EW if (a == i or b == i)) <= 2
     m.PeriodCap = Constraint(m.T, m.P, rule=period_cap)
 
     # (implied) team-week participation =1
-    #    *** FIX: somma solo sulle tuple (a,b,w) in m.EW con ww==w e che coinvolgono i ***
     def team_week_exactly_one(m, i, w):
         return sum(m.x[(a, b, ww), p]
                    for (a, b, ww) in m.EW if ww == w and (a == i or b == i)
@@ -265,7 +260,7 @@ def extract_solution_matrix(n, weeks_pairs, xsol, ssol):
     return mat
 
 # --------------------------
-# Main run (Stage A + Stage B nella stessa esecuzione)
+# Main run
 # --------------------------
 
 def run(n: int,
@@ -279,7 +274,14 @@ def run(n: int,
     if n % 2 != 0 or n < 2:
         raise ValueError("n must be an even integer >= 2.")   
     
-    opt = SolverFactory(solver_name)
+    if solver_name == 'cplex':
+        print('using cplex')
+        # opt = SolverFactory('cplex', executable='/home/filippo/CPLEX_Studio2211/cplex/bin/x86-64_linux/cplex')
+        # opt = SolverFactory('cplex', executable='/home/filippo/CPLEX-old-version/cplex/bin/x86-64_linux/cplex')
+        opt = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
+    else:
+        opt = SolverFactory(solver_name)
+
     if opt is None or not opt.available():
         raise RuntimeError(f"Solver '{solver_name}' non disponibile o non installato.")
 
@@ -314,7 +316,10 @@ def run(n: int,
     )
 
     approach_entries = {}
-    approach_name_feas = f"mip_{solver_name}_feas_{'sym' if use_symmetry_breaking else 'nosym'}"
+    warm_label = "warm" if not disable_warmstart else "nowarm"
+    approach_name_feas = (
+        f"mip_{solver_name}_feas_{'sym' if use_symmetry_breaking else 'nosym'}_{warm_label}"
+    )
     approach_entries[approach_name_feas] = {
         "time": reported_time_A,
         "optimal": bool(optA),
@@ -330,7 +335,13 @@ def run(n: int,
 
     # ----- Stage B -----
     mB = build_stageB_model(n, weeks_pairs, xsol, use_symmetry_breaking=use_symmetry_breaking)
-    optB = SolverFactory(solver_name)
+    if solver_name == 'cplex':
+        print('using cplex')
+        # optB = SolverFactory('cplex', executable='/home/filippo/CPLEX_Studio2211/cplex/bin/x86-64_linux/cplex')
+        # optB = SolverFactory('cplex', executable='/home/filippo/CPLEX-old-version/cplex/bin/x86-64_linux/cplex')
+        optB = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
+    else:
+        optB = SolverFactory(solver_name)
     apply_timelimit(optB, solver_name, budget_B, mip_gap=0.0)
 
     t0 = _time.time()
@@ -357,7 +368,9 @@ def run(n: int,
     except:
         obj_out = None
 
-    approach_name_obj = f"mip_{solver_name}_obj_{'sym' if use_symmetry_breaking else 'nosym'}"
+    approach_name_obj = (
+        f"mip_{solver_name}_obj_{'sym' if use_symmetry_breaking else 'nosym'}_{warm_label}"
+    )
     approach_entries[approach_name_obj] = {
         "time": reported_time_B,
         "optimal": bool(optB_flag),
@@ -393,7 +406,7 @@ def main():
     ap.add_argument("--n", type=int, required=True, help="numero squadre (pari)")
     ap.add_argument("--solver", type=str, default="highs", help="highs | cbc | gurobi | cplex ...")
     ap.add_argument("--timelimit", type=int, default=300, help="budget totale in secondi (default 300)")
-    ap.add_argument("--splitA", type=float, default=0.9, help="quota tempo Stage A (0<split≤1), default 0.9")
+    ap.add_argument("--splitA", type=float, default=0.95, help="quota tempo Stage A (0<split≤1), default 0.9")
     ap.add_argument("--no_symbreak", action="store_true", help="disabilita symmetry breaking")
     ap.add_argument("--no_warmstart", action="store_true", help="disabilita warm-start greedy")
     ap.add_argument("--no_objective", action="store_true", help="salta Stage B (solo feasible)")
