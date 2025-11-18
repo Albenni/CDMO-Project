@@ -41,7 +41,6 @@ for S in "${solvers[@]}"; do
   echo "[SAT Optimization] Running SAT with N=$N on $S without SB"
   python -u source/SAT/sat_optimization.py "$N" "$S" --no-sym|| \
     echo "[SAT Optimization] Warning: solver $S not available or failed."
-
 done
 
 echo "[SAT] Result at: res/SAT/${N}.json"
