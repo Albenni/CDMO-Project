@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # CP runner (300s). Usage:
-#   python run_cp.py <dec|opt> <N> [noSB] [noImplied]
-# - Tries all solvers in SOLVERS
+#   python run_cp.py <dec|opt> <N> [SOLVER] [noSB] [noImplied]
+# - If SOLVER is omitted or 'all', tries all solvers in SOLVERS
 # - Caps JSON time to TLIMIT
 # - Merges with existing res/CP/<N>.json
 # - Optional flags:
@@ -66,8 +66,7 @@ def run_one(
     inst = Instance(solver, Model(model_path))
     inst["n"] = n
 
-    # Try to pass SB / IMPLIED if the model declares them.
-    # If they are not declared, MiniZinc will raise; we guard with try/except.
+    # Pass SB / IMPLIED (esistono nei modelli che mi hai mandato)
     try:
         inst["SB"] = sb_enabled
     except Exception:
@@ -78,14 +77,16 @@ def run_one(
         pass
 
     log(
-        f"[run]  {solver_name} | mode={mode} | SB={sb_enabled} | IMPLIED={implied_enabled} | tlimit={TLIMIT}s"
+        f"[run]  {solver_name} | mode={mode} | SB={sb_enabled} | "
+        f"IMPLIED={implied_enabled} | tlimit={TLIMIT}s"
     )
     t0 = time.perf_counter()
     try:
         res = inst.solve(timeout=timedelta(seconds=TLIMIT), all_solutions=False)
     except Exception as e:
         log(
-            f"[done] {solver_name} | mode={mode} | SB={sb_enabled} | IMPLIED={implied_enabled} | ERROR: {e}"
+            f"[done] {solver_name} | mode={mode} | SB={sb_enabled} | "
+            f"IMPLIED={implied_enabled} | ERROR: {e}"
         )
         return {
             "time": TLIMIT,
@@ -129,16 +130,22 @@ def run_one(
         }
 
     log(
-        f"[done] {solver_name} | mode={mode}{key_suffix} | status={status} | time={out['time']}s | "
-        f"optimal={out['optimal']}" + (f" | obj={out['obj']}" if mode == "opt" else "")
+        f"[done] {solver_name} | mode={mode}{key_suffix} | status={status} | "
+        f"time={out['time']}s | optimal={out['optimal']}"
+        + (f" | obj={out['obj']}" if mode == "opt" else "")
     )
     return out
 
 
 def main():
-    if len(sys.argv) < 3 or len(sys.argv) > 5:
+    # Ora:
+    #   python run_cp.py dec 8 cp-sat noImplied noSB
+    # oppure (tutti i solver, compatibilità vecchia):
+    #   python run_cp.py dec 8 noImplied noSB
+    if len(sys.argv) < 3 or len(sys.argv) > 6:
         print(
-            "Usage: python run_cp.py <dec|opt> <N> [noSB] [noImplied]", file=sys.stderr
+            "Usage: python run_cp.py <dec|opt> <N> [SOLVER] [noSB] [noImplied]",
+            file=sys.stderr,
         )
         sys.exit(2)
 
@@ -152,8 +159,22 @@ def main():
         print("N must be an integer.", file=sys.stderr)
         sys.exit(2)
 
-    # Parse optional flags
-    args = {a.lower() for a in sys.argv[3:]}
+    # Decidi se il terzo argomento è un solver o un flag
+    solver_arg = None
+    flag_args_start = 3
+    if len(sys.argv) >= 4:
+        third = sys.argv[3].lower()
+        if third in {"nosb", "noimplied"}:
+            # vecchio stile: nessun solver esplicito, solo flag
+            solver_arg = None
+            flag_args_start = 3
+        else:
+            # nuovo stile: solver esplicito
+            solver_arg = sys.argv[3]
+            flag_args_start = 4
+
+    # Flags (da flag_args_start in poi)
+    args = {a.lower() for a in sys.argv[flag_args_start:]}
     sb_enabled = "nosb" not in args
     implied_enabled = "noimplied" not in args
 
@@ -179,7 +200,7 @@ def main():
         print(f"Cannot find model for mode '{mode}'. Check paths.", file=sys.stderr)
         sys.exit(2)
 
-    # Load existing JSON (to merge results of other mode/previous runs)
+    # Carica eventuale JSON esistente
     out_path = os.path.join(OUTDIR, f"{n}.json")
     if os.path.exists(out_path):
         try:
@@ -192,8 +213,14 @@ def main():
     else:
         results = {}
 
-    # Run all solvers
-    for solver_name in SOLVERS:
+    # Decidi quali solver lanciare
+    if solver_arg is None or solver_arg.lower() == "all":
+        solvers_to_run = SOLVERS
+    else:
+        solvers_to_run = [solver_arg]
+
+    # Run sui solver scelti
+    for solver_name in solvers_to_run:
         out = run_one(
             model_path,
             n,
@@ -206,7 +233,7 @@ def main():
         if out is not None:
             results[f"{solver_name}_{mode}{key_suffix}"] = out
 
-    # Write merged results (time capped)
+    # Scrivi JSON unificato
     with open(out_path, "w") as fh:
         json.dump(results, fh, indent=2)
     log(f"[write] {out_path}")
