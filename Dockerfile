@@ -30,7 +30,7 @@ ENV VIRTUAL_ENV=/opt/venv \
     PYTHONDONTWRITEBYTECODE=1
 
 # 3) Python dependencies
-#    - SAT: from root-level requirements.txt (your friend's part)
+#    - SAT: from root-level requirements.txt 
 #    - CP: minizinc (Python binding) and ortools
 COPY requirements.txt /tmp/requirements.txt
 RUN python -m pip install --upgrade pip \
@@ -46,10 +46,10 @@ COPY . /app
 RUN mkdir -p /app/res/SAT/dimacs \
     && mkdir -p /app/res/CP
 
-# 6) Make the SAT launch script executable (unchanged)
+# 6) Make the SAT launch script executable 
 RUN chmod +x /app/script/run_sat.sh
 
 # 7) Entrypoint:
-#    - by default runs SAT for N = 16 and 18 (exactly as your friend's version)
+#    - by default runs SAT for N = 16 and 18 
 ENTRYPOINT ["bash", "-lc", "for N in 16 18; do /app/script/run_sat.sh \"$N\"; done"]
 CMD ["18"]
