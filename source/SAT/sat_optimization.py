@@ -25,13 +25,14 @@ from utils import (
 TIME_LIMIT_SEC = 300  # 5 minutes
 
 def _parse_sym_flag(argv):
+    """
+    Return (extra_symmetry: bool) based on an optional third argument.
+    Default: True.
+    """
     if len(argv) < 4:
         return True
     flag = (argv[3] or "").strip().lower()
-    true_vals = {"--sym", "--with-sym", "--sym=1", "sym", "1", "true", "yes"}
-    false_vals = {"--no-sym", "--sym=0", "nosym", "0", "false", "no"}
-    if flag in true_vals:
-        return True
+    false_vals = {"--no-sym", "nosym"}
     if flag in false_vals:
         return False
     return True

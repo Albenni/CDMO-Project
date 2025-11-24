@@ -12,7 +12,7 @@ else
   N="$1"
 fi
 
-SOLVERS=("cplex" "cbc" "highs")
+SOLVERS=("cbc" "highs") # "cplex"
 
 echo "Running with n = $N"
 

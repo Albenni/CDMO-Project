@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         patch \
         zlib1g-dev \
+        coinor-cbc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -29,13 +30,10 @@ ENV VIRTUAL_ENV=/opt/venv \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# 3) Python dependencies
-#    - SAT: from root-level requirements.txt 
-#    - CP: minizinc (Python binding) and ortools
+# 3) Python dependencies from requirements.txt
 COPY requirements.txt /tmp/requirements.txt
 RUN python -m pip install --upgrade pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt \
-    && pip install --no-cache-dir minizinc ortools
+    && pip install --no-cache-dir -r /tmp/requirements.txt
 
 # 4) Copy the whole project (code + scripts + checkers + etc.)
 COPY . /app
@@ -43,13 +41,8 @@ COPY . /app
 # 5) Output folders
 #    - SAT DIMACS (original)
 #    - CP results (used by run_cp.py)
+#    - MIP results (used by run_mip.py)
 RUN mkdir -p /app/res/SAT/dimacs \
-    && mkdir -p /app/res/CP
+    && mkdir -p /app/res/CP && mkdir -p /app/res/MIP
 
-# 6) Make the SAT launch script executable 
-RUN chmod +x /app/script/run_sat.sh
 
-# 7) Entrypoint:
-#    - by default runs SAT for N = 16 and 18 
-ENTRYPOINT ["bash", "-lc", "for N in 16 18; do /app/script/run_sat.sh \"$N\"; done"]
-CMD ["18"]

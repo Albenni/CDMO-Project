@@ -25,7 +25,7 @@ solvers=("z3" "glucose3" "minisat22")
 # Cycle through solvers
 for S in "${solvers[@]}"; do
   echo "[SAT Decision] Running SAT with N=$N on $S"
-  # Run solver and handle potential failures
+  # Run solvers and handle potential failures
   python -u source/SAT/sat_decision.py "$N" "$S" || \
     echo "[SAT Decision] Warning: solver $S not available or failed."
 
@@ -34,7 +34,7 @@ for S in "${solvers[@]}"; do
     echo "[SAT Optimization] Warning: solver $S not available or failed."
 
   echo "[SAT Decision no SB] Running SAT with N=$N on $S without SB"
-  # Run solver and handle potential failures
+  # Run solvers with no symmetry and handle potential failures
   python -u source/SAT/sat_decision.py "$N" "$S" --no-sym|| \
     echo "[SAT Decision no SB] Warning: solver $S not available or failed."
 
