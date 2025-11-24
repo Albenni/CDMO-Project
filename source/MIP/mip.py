@@ -266,7 +266,7 @@ def extract_solution_matrix(n, weeks_pairs, xsol, ssol):
 def run(n: int,
         solver_name: str = "cbc",
         total_timelimit: int = 300,
-        split_A: float = 0.8,
+        split_A: float = 0.9,
         use_symmetry_breaking: bool = True,
         disable_warmstart: bool = False,
         no_objective: bool = False):
@@ -275,9 +275,6 @@ def run(n: int,
         raise ValueError("n must be an even integer >= 2.")   
     
     if solver_name == 'cplex':
-        print('using cplex')
-        # opt = SolverFactory('cplex', executable='/home/filippo/CPLEX_Studio2211/cplex/bin/x86-64_linux/cplex')
-        # opt = SolverFactory('cplex', executable='/home/filippo/CPLEX-old-version/cplex/bin/x86-64_linux/cplex')
         opt = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
     else:
         opt = SolverFactory(solver_name)
@@ -305,7 +302,7 @@ def run(n: int,
     resA = opt.solve(mA, tee=False)
     tA = _time.time() - t0
     feasA, optA, _ = term_flags(resA)
-    reported_time_A = int(math.floor(tA)) if optA else 300
+    reported_time_A = int(math.floor(tA)) if optA else total_timelimit
 
     xsol = extract_x_solution(mA, n, weeks_pairs)
 
@@ -314,6 +311,9 @@ def run(n: int,
         n, weeks_pairs, xsol,
         {(i, j, w): 1 for w in range(1, n) for (i, j) in weeks_pairs[w - 1]}
     )
+
+    if not feasA:
+        sol_matrix_feas = []
 
     approach_entries = {}
     warm_label = "warm" if not disable_warmstart else "nowarm"
@@ -334,54 +334,63 @@ def run(n: int,
         return
 
     # ----- Stage B -----
-    mB = build_stageB_model(n, weeks_pairs, xsol, use_symmetry_breaking=use_symmetry_breaking)
-    if solver_name == 'cplex':
-        print('using cplex')
-        # optB = SolverFactory('cplex', executable='/home/filippo/CPLEX_Studio2211/cplex/bin/x86-64_linux/cplex')
-        # optB = SolverFactory('cplex', executable='/home/filippo/CPLEX-old-version/cplex/bin/x86-64_linux/cplex')
-        optB = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
-    else:
-        optB = SolverFactory(solver_name)
-    apply_timelimit(optB, solver_name, budget_B, mip_gap=0.0)
-
-    t0 = _time.time()
-    resB = optB.solve(mB, tee=False)
-    tB = _time.time() - t0
-    feasB, optB_flag, _ = term_flags(resB)
-    reported_time_B = int(math.floor(tB)) if optB_flag else 300
-
-    # extract s
-    ssol = {}
-    def sval(v):
-        try:
-            return value(v)
-        except:
-            return None
-    for (i, j, w) in mB.EW.data():
-        v = sval(mB.s[(i, j, w)])
-        ssol[(i, j, w)] = 1 if (v is not None and v >= 0.5) else 0
-
-    sol_matrix_obj = extract_solution_matrix(n, weeks_pairs, xsol, ssol)
-    try:
-        obj_val = float(value(mB.Obj))
-        obj_out = int(round(obj_val))
-    except:
-        obj_out = None
-
     approach_name_obj = (
         f"mip_{solver_name}_obj_{'sym' if use_symmetry_breaking else 'nosym'}_{warm_label}"
-    )
+    ) 
+    if feasA:
+        mB = build_stageB_model(n, weeks_pairs, xsol, use_symmetry_breaking=use_symmetry_breaking)
+        if solver_name == 'cplex':
+            optB = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
+        else:
+            optB = SolverFactory(solver_name)
+        apply_timelimit(optB, solver_name, budget_B, mip_gap=0.0)
+
+        t0 = _time.time()
+        resB = optB.solve(mB, tee=False)
+        tB = _time.time() - t0
+        feasB, optB_flag, _ = term_flags(resB)
+        reported_time_B = int(math.floor(tB)) if optB_flag else total_timelimit
+
+        # tempo totale (Fase A + Fase B)
+        reported_time_total = min(reported_time_A + reported_time_B, total_timelimit)
+
+        # extract s
+        ssol = {}
+        def sval(v):
+            try:
+                return value(v)
+            except:
+                return None
+        for (i, j, w) in mB.EW.data():
+            v = sval(mB.s[(i, j, w)])
+            ssol[(i, j, w)] = 1 if (v is not None and v >= 0.5) else 0
+
+        sol_matrix_obj = extract_solution_matrix(n, weeks_pairs, xsol, ssol)
+        if not feasB:
+            sol_matrix_obj = []
+
+        try:
+            obj_val = float(value(mB.Obj))
+            obj_out = int(round(obj_val))
+        except:
+            obj_out = None
+
+    else:
+        reported_time_total = total_timelimit
+        optB_flag = False
+        obj_out = None
+        sol_matrix_obj = []
+
     approach_entries[approach_name_obj] = {
-        "time": reported_time_B,
-        "optimal": bool(optB_flag),
+        "time": reported_time_total,
+        "optimal": optB_flag,
         "obj": obj_out,
         "sol": sol_matrix_obj
     }
-
     _write_json(n, approach_entries)
 
     print(f"[{approach_name_feas}] n={n} | time={reported_time_A}s | optimal={optA}")
-    print(f"[{approach_name_obj}]  n={n} | time={reported_time_B}s | optimal={optB_flag} | obj={obj_out}")
+    print(f"[{approach_name_obj}]  n={n} | time={reported_time_total}s | optimal={optB_flag} | obj={obj_out}")
     print(f"-> JSON: res/MIP/{n}.json")
 
 
@@ -402,11 +411,11 @@ def _write_json(n, entries_dict):
 # --------------------------
 
 def main():
-    ap = argparse.ArgumentParser(description="STS with MIP (Pyomo) – 2-stage in ≤300s (single run)")
+    ap = argparse.ArgumentParser(description="STS with MIP (Pyomo) - 2-stage in ≤300s (single run)")
     ap.add_argument("--n", type=int, required=True, help="numero squadre (pari)")
-    ap.add_argument("--solver", type=str, default="highs", help="highs | cbc | gurobi | cplex ...")
+    ap.add_argument("--solver", type=str, default="cbc", help="highs | cbc | cplex")
     ap.add_argument("--timelimit", type=int, default=300, help="budget totale in secondi (default 300)")
-    ap.add_argument("--splitA", type=float, default=0.95, help="quota tempo Stage A (0<split≤1), default 0.9")
+    ap.add_argument("--splitA", type=float, default=0.95, help="quota tempo Stage A (0<split≤1), default 0.95")
     ap.add_argument("--no_symbreak", action="store_true", help="disabilita symmetry breaking")
     ap.add_argument("--no_warmstart", action="store_true", help="disabilita warm-start greedy")
     ap.add_argument("--no_objective", action="store_true", help="salta Stage B (solo feasible)")

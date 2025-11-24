@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# Esegue tutte le combinazioni MIP con/without symmetry breaking e warm-start
-# per i solver: cbc, cplex, highs
-# Tutto l'output va al terminale
+# Run all MIP combinations with/without symmetry breaking and warm-start
+# for: cbc, cplex, highs
 
-set -e  # interrompe in caso di errore
+set -e
 
-N=18
-SOLVERS=("cplex" "highs")
+# --- Parameter N ---
+if [ -z "$1" ]; then
+  echo "No n specified. Using n=16 (default)."
+  N=16
+else
+  N="$1"
+fi
+
+SOLVERS=("cplex" "cbc" "highs")
+
+echo "Running with n = $N"
 
 for solver in "${SOLVERS[@]}"; do
   echo
@@ -35,8 +43,8 @@ for solver in "${SOLVERS[@]}"; do
   echo "-----------------------------------------------------------"
 
   echo
-  echo "Completato solver: $solver"
+  echo "solver completed: $solver"
   echo
 done
 
-echo "🎯 Tutti i test completati con successo!"
+echo "All tests completed!"

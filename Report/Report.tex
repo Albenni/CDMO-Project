@@ -600,7 +600,9 @@ s_{ij1} = 1 \quad \text{for the first pair $(i,j)$ of week 1.}
 The MIP model was implemented in \texttt{Pyomo} and executed via the
 \texttt{SolverFactory} interface.
 The default solver used was \texttt{CBC}, with alternative runs using
-\texttt{HiGHS} and \texttt{CPLEX} for performance comparison.
+\texttt{HiGHS} and \texttt{CPLEX} for performance comparison. Note that \texttt{CPLEX} is not bundled in the Docker image due to licensing
+restrictions; only \texttt{HiGHS} and \texttt{CBC} are available by default.
+
 A total time budget of 300~seconds was imposed for each instance, divided between
 Stage~A and Stage~B according to a user-defined split ratio
 ($\texttt{splitA}=0.95$ by default).
@@ -621,7 +623,7 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 10 & 0 & 0 & 0\\
 12 & 8 & 0 & 0\\
 14 & 9 & 62 & 0\\
-16 & \(>300\) & \(>300\) & \(>300\)\\
+16 & \(>300\) & 113 & 2\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{Baseline (SB+WS)}
@@ -633,7 +635,7 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 10 & 3 & 0 & 0\\
 12 & 0 & 0 & 0\\
 14 & 166 & 9 & 1\\
-16 & 131 & \(>300\) & \(>300\)\\
+16 & \(>300\) & 11 & 49\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{noSB (WS on)}
@@ -648,7 +650,7 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 10 & 0 & 0 & 0\\
 12 & 8 & 0 & 0\\
 14 & 9 & 62 & 0\\
-16 & 209 & \(>300\) & \(>300\)\\
+16 & \(>300\) & 120 & 2\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{noWS (SB on)}
@@ -660,7 +662,7 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 10 & 3 & 0 & 0\\
 12 & 0 & 0 & 0\\
 14 & 169 & 9 & 1\\
-16 & 223 & \(>300\) & \(>300\)\\
+16 & \(>300\) & 11 & 49\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{noWS + noSB}
