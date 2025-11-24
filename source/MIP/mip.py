@@ -269,13 +269,14 @@ def run(n: int,
         split_A: float = 0.9,
         use_symmetry_breaking: bool = True,
         disable_warmstart: bool = False,
-        no_objective: bool = False):
+        no_objective: bool = False,
+        executable_path: str = "/"):
 
     if n % 2 != 0 or n < 2:
         raise ValueError("n must be an even integer >= 2.")   
     
     if solver_name == 'cplex':
-        opt = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
+        opt = SolverFactory('cplex', executable=executable_path)
     else:
         opt = SolverFactory(solver_name)
 
@@ -340,7 +341,7 @@ def run(n: int,
     if feasA:
         mB = build_stageB_model(n, weeks_pairs, xsol, use_symmetry_breaking=use_symmetry_breaking)
         if solver_name == 'cplex':
-            optB = SolverFactory('cplex', executable='/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex')
+            optB = SolverFactory('cplex', executable=executable_path)
         else:
             optB = SolverFactory(solver_name)
         apply_timelimit(optB, solver_name, budget_B, mip_gap=0.0)
@@ -419,6 +420,7 @@ def main():
     ap.add_argument("--no_symbreak", action="store_true", help="disabilita symmetry breaking")
     ap.add_argument("--no_warmstart", action="store_true", help="disabilita warm-start greedy")
     ap.add_argument("--no_objective", action="store_true", help="salta Stage B (solo feasible)")
+    ap.add_argument("--executable_path", default="/home/filippo/CPLEX/cplex/bin/x86-64_linux/cplex", help="path to executable for solver who requires it (cplex)")
     args = ap.parse_args()
 
     try:
@@ -429,7 +431,8 @@ def main():
             split_A=args.splitA,
             use_symmetry_breaking=not args.no_symbreak,
             disable_warmstart=args.no_warmstart,
-            no_objective=args.no_objective
+            no_objective=args.no_objective,
+            executable_path=args.executable_path
         )
     except Exception as e:
         print(f"Errore: {e}", file=sys.stderr)
