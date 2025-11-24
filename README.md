@@ -32,26 +32,43 @@ Enable/disable symmetry breaking (default: enabled).
 
 # MIP
 
---n
+To run all tests in the report, use:
+
+```bash
+./run_mip.sh <N>
+```
+
+To run a single test:
+
+```bash
+python source/MIP/mip.py --n <N> --solver <cbc>
+```
+
+## Available Parameters
+
+- --n
 Number of teams.
 
---solver
-Solver to use: cbc | highs.
-Default: cbc.
+- --solver
+Solver to use: `cbc` | `highs`
+*Default: cbc*
 
---timelimit
+- --timelimit
 Maximum total time (in seconds) for Stage A + Stage B.
-Default: 300.
+*Default: 300*
 
---splitA
-Fraction of the total time to allocate to Phase A (0–1).
-Default: 0.95.
+- --splitA
+Fraction of the total time allocated to Stage A (0–1).
+*Default: 0.95*
 
---no_symbreak
-Disable symmetry breaking (flag).
+- --no_symbreak
+Disable symmetry breaking.
 
---no_warmstart
-Disable the initial greedy warm-start (flag).
+- --no_warmstart
+Disable the initial greedy warm-start.
 
---no_objective
-Run only Phase A, without orientation optimization (flag).
+- --no_objective
+Run only Stage A (skip orientation optimization).
+
+- --executable_path
+Path to the CPLEX executable (required only for CPLEX, not for CBC or HiGHS).
