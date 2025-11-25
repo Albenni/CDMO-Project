@@ -2,10 +2,11 @@
 # Usage:
 #   python run_cp.py <dec|opt> <N> [noSB] [noIC|noImplied] [--solver <name1[,name2,...]>]
 #
-# Note:
-# - Se non specifichi --solver, esegue sempre tutti i solver in SOLVERS.
-# - Restituisce l'eventuale incumbent anche se lo status è UNKNOWN (sol -> H/A).
-# - Merge non distruttivo in res/CP/<N>.json con chiavi diverse (es. cp-sat_opt_noSB).
+# Notes:
+# - If you do not specify --solver, all solvers in SOLVERS are run.
+# - The last incumbent is returned even if the solver status is UNKNOWN (sol -> H/A).
+# - Results are merged non-destructively into res/CP/<N>.json using distinct keys
+#   (e.g., cp-sat_opt_noSB).
 
 import json, os, sys, time
 from datetime import timedelta
@@ -48,7 +49,7 @@ def compute_key(solver_name: str, mode: str, SB: bool, IC: bool) -> str:
 
 
 def parse_solver_arg(argv_tail):
-    """Legge --solver/-s <name1[,name2,...]> e restituisce la lista selezionata."""
+    """Read --solver/-s <name1[,name2,...]> and return the selected list."""
     sel = []
     i = 0
     while i < len(argv_tail):
@@ -62,13 +63,13 @@ def parse_solver_arg(argv_tail):
 
 
 def strip_solver_tokens(argv_tail):
-    """Rimuove dall'elenco gli argomenti --solver/-s e il loro valore."""
+    """Remove --solver/-s and their value from the argument list."""
     out = []
     i = 0
     while i < len(argv_tail):
         tok = argv_tail[i]
         if tok in ("--solver", "-s"):
-            i += 2  # salta anche il valore
+            i += 2  # skip also the value
         else:
             out.append(tok)
             i += 1
@@ -76,7 +77,7 @@ def strip_solver_tokens(argv_tail):
 
 
 def parse_flags(argv_tail):
-    """Accetta 'noSB' e 'noIC|noImplied' (case-insensitive)."""
+    """Accept 'noSB' and 'noIC|noImplied' (case-insensitive)."""
     SB = True
     IC = True
     for tok in argv_tail:
@@ -86,13 +87,13 @@ def parse_flags(argv_tail):
         elif t in ("noic", "noimplied"):
             IC = False
         else:
-            # argomento sconosciuto: ignora (tollerante)
+            # unknown argument: ignore (be tolerant)
             pass
     return SB, IC
 
 
 def resolve_model_path(mode: str) -> str:
-    # Supporta entrambe le strutture:
+    # Support both layouts:
     #  - <repo>/source/CP/sts_*.mzn
     #  - <repo>/sts_*.mzn
     if mode == "dec":
@@ -112,7 +113,7 @@ def resolve_model_path(mode: str) -> str:
 
 
 def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: bool):
-    """Esegue un modello/solver; accetta incumbents anche se status UNKNOWN; cap time in JSON."""
+    """Run a model/solver pair; accept incumbents even if status is UNKNOWN; cap time in JSON."""
     try:
         solver = Solver.lookup(solver_name)
     except Exception:
@@ -121,7 +122,7 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: 
 
     inst = Instance(solver, Model(model_path))
     inst["n"] = n
-    # I modelli devono avere: bool: SB; bool: IMPLIED;
+    # The models are expected to expose: bool: SB; bool: IMPLIED;
     inst["SB"] = SB
     inst["IMPLIED"] = IC
 
@@ -133,7 +134,6 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: 
         log(f"[done] {solver_name} | mode={mode} | ERROR: {e}")
         return {
             "time": TLIMIT,
-            "status": "ERROR",
             "optimal": (mode == "opt" and False),
             "obj": None,
             "sol": [],
@@ -143,7 +143,7 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: 
     time_cap = min(elapsed, TLIMIT)
     status = getattr(res.status, "name", str(res.status))
 
-    # Estrai eventuale incumbent comunque
+    # Extract incumbent (if any)
     H = A = None
     try:
         H, A = res["H"], res["A"]
@@ -164,7 +164,6 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: 
     if mode == "dec":
         out = {
             "time": time_cap,
-            "status": status,
             "optimal": False,
             "obj": None,
             "sol": sol,
@@ -172,7 +171,6 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: 
     else:
         out = {
             "time": time_cap,
-            "status": status,
             "optimal": (status == "OPTIMAL_SOLUTION"),
             "obj": obj_val,
             "sol": sol,
