@@ -8,69 +8,86 @@
 \usepackage{bm}
 \addbibresource{references.bib}
 
-\title{Project Title}
-\author{Name, lastname and UniBo e-mail addresses\\
-of the authors, in alphabetical order}
+\title{Modelling and Solving STS Problem with CP, SAT and MIP}
+\author{Alberto Benni alberto.benni@studio.unibo.it \and Lorenzo Rolfini lorenzo.rolfini@studio.unibo.it \and Filippo Terzi filippo.terzi2@studio.unibo.it}
 \date{}
 
 \begin{document}
 
 \maketitle
 
-\noindent
-Please do not be verbose. Describe only the relevant information, and omit the unnecessary/redundant details. Use a high-level, mathematical language in your model description, as was done in your course material. Do not copy and paste any piece of code in the report.
-
-\medskip
-
-\noindent
-The report should be written in \LaTeX{} using \verb|\documentclass{article}| without changing fonts, font size and margins. The page limit is 12 pages with three optimization approaches and 15 pages with all the approaches, excluding the authenticity and the author contribution statement and the references. You do not need to reach the page limit. You are recommended to use \texttt{www.overleaf.com/} to produce a shared \LaTeX{} document.
 
 \section{Introduction}
+\label{sec:intro}
 
-You do not need to introduce the problem, nor the optimization methods that you are using to tackle the problem. After a proper introduction to your report, describe and formalize what is common to all the models (such as input parameters, the objective variable and its bounds, pre-processing steps, \dots). Refer to this section where necessary instead of copying and pasting text in the following sections.
+We address the Sports Tournament Scheduling (STS) problem in its single
+round--robin version. An even number $n$ of teams must play over $n-1$ weeks,
+with $n/2$ matches per week. In every slot $(w,p)$ one oriented match
+$(i,j)$ is scheduled, with $i$ at home and $j$ away.
+
+Throughout the report we use the common index sets
+\[
+  \text{Teams} = \{1,\dots,n\},\quad
+  \text{Weeks} = \{1,\dots,n-1\},\quad
+  \text{Periods} = \{1,\dots,n/2\},
+\]
+and represent a schedule as two Periods$\times$Weeks matrices $H$ and $A$,
+where $(H_{p,w},A_{p,w})$ encodes the oriented match played in slot $(w,p)$.
+This representation is shared by all models and is used both for solver output
+and for the official checker.
+
+We consider both a \emph{decision} version (find any feasible schedule) and an
+\emph{optimization} version that also accounts for fairness. Let
+$\mathrm{home}_t = |\{(p,w)\mid H_{p,w}=t\}|$ be the number of home games of
+team $t$. Since each team plays $n-1$ games, the ideal split is $(n-1)/2$;
+we measure imbalance by
+\[
+  \mathrm{dev}_t = \bigl|\mathrm{home}_t - \tfrac{n-1}{2}\bigr|
+  \qquad (t\in\text{Teams}),
+\]
+and minimize the aggregate deviation $\sum_t \mathrm{dev}_t$.
+
+All models work with two incidence layers:
+a \emph{match-at-slot} view, telling which oriented match is played in each
+slot $(w,p)$, and a \emph{team-at-slot} view, telling whether team $t$ occupies
+slot $(w,p)$. These layers are instantiated by different variable families in
+each formalism (e.g., $Z/U$ in the CP model, $X/Y$ in the SAT encoding, and
+binary assignment variables $x$ in the MIP model), but we refer to them
+generically as match-at-slot and team-at-slot variables to avoid repeating
+the same definitions in every section.
 
 \section{CP Model}
 \label{sec:cp-model}
 
-We model Sports Tournament Scheduling with two MiniZinc variants: a
+We model Sports Tournament Scheduling in MiniZinc with two variants: a
 \emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization}
-model (\texttt{sts\_opt.mzn}). Both use
-\[
-  \text{Teams} = \{1,\dots,n\},\quad
-  \text{Weeks} = \{1,\dots,n-1\},\quad
-  \text{Periods} = \{1,\dots,n/2\}.
-\]
-In this project we consider instances with an even number of teams; moreover,
-the period–usage specification makes the case $n=4$ infeasible, so it is
-excluded.
+model (\texttt{sts\_opt.mzn}). Both reuse the common index sets and schedule
+representation introduced in Section~\ref{sec:intro}, namely
+$\text{Teams}$, $\text{Weeks}$, $\text{Periods}$ and the oriented
+$(H,A)$ matrices. In all experiments we consider even values
+$n\in\{8,10,12,14,16,18\}$; the period--usage rule makes $n=4$ infeasible and
+is therefore excluded from the benchmark set.
 
 \noindent\textit{Notation.} Iverson brackets $[\,\cdot\,]$ denote Boolean$\to$integer casts.
 
 \subsection{Decision variables}
 \label{subsec:cp-vars}
 
+Both CP variants explicitly instantiate the generic match-at-slot and
+team-at-slot layers of Section~\ref{sec:intro} as Boolean arrays $Z$ and $U$.
+On top of these core variables, we introduce the following additional state.
+
 \paragraph{Decision model}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item \textbf{\(\bm{Z}\) (match-at-slot indicator):}
-        \(Z_{w,p,i,j}\in\{0,1\}\) indicates whether the unordered pair
-        \(\{i,j\}\) (\(i<j\)) is scheduled in slot \((w,p)\); this is the
-        authoritative timetable view.
-  \item \textbf{\(\bm{U}\) (team-at-slot indicator):}
-        \(U_{w,p,t}\in\{0,1\}\) marks whether team \(t\) plays in \((w,p)\);
-        it is linked to \(Z\) so weekly and per–period counts are stated
-        directly.
-  \item \textbf{\(\bm{H},\bm{A}\) (output matrices):}
-        Period\(\times\)week arrays required by the checker, derived from the
-        internal variables.
-  \item \textbf{\(\bm{C}\) (exact per–period profile, see
-        \emph{Implied constraints}):}
-        \(C_{t,p}\in\{1,2\}\) counts the uses of period \(p\) by team \(t\).
+  \item \textbf{\(\bm{C}\) (exact per--period profile):}
+        \(C_{t,p}\in\{1,2\}\) counts the uses of period \(p\) by team \(t\)
+        and is constrained as in Section~\ref{subsec:cp-constraints}.
 \end{itemize}
 
 \paragraph{Optimization model}
 \begin{itemize}\setlength{\itemsep}{2pt}
-  \item \(\bm{Z},\ \bm{U},\ (\bm{H},\bm{A}),\ \bm{C}\) (as above).
-  \item \textbf{\(\bm{W}\) (pair–to–week mapping):}
+  \item \(\bm{C}\) (as above).
+  \item \textbf{\(\bm{W}\) (pair--to--week mapping):}
         \(W_{i,j}\in\text{Weeks}\) for \(i<j\) records in which week the match
         \(\{i,j\}\) is played.
   \item \textbf{\(\bm{B}\) (orientation flag):}
@@ -79,11 +96,12 @@ excluded.
   \item \textbf{\(\bm{Hc},\ \bm{\mathrm{dev}},\ \mathrm{obj}\) (fairness
         counters and objective):}
         \(Hc_t\) is the number of home matches of team \(t\);
-        \(\mathrm{dev}_t\) is the absolute deviation of team \(t\) from a
-        perfectly balanced split; the objective
+        \(\mathrm{dev}_t\) is the absolute deviation of team \(t\) from the
+        ideal split; the objective
         \(\mathrm{obj}=\sum_{t}\mathrm{dev}_t\) aggregates the team-wise
         imbalances and is minimized.
 \end{itemize}
+
 
 \subsection{Objective function}
 \label{subsec:cp-objective}
@@ -204,7 +222,6 @@ prevent spurious variables from appearing in the arrays.
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & 0 & 0 & 0\\
 10 & 17 & \(>300\) & 0\\
 12 & 3 & \(>300\) & \(>300\)\\
 14 & 11 & \(>300\) & \(>300\)\\
@@ -216,7 +233,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & 0 & 0 & 0\\
 10 & 3 & 0 & 80\\
 12 & 75 & 7 & \(>300\)\\
 14 & 200 & \(>300\) & \(>300\)\\
@@ -231,7 +247,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & 0 & 0 & 0\\
 10 & 83 & 2 & 0\\
 12 & 10 & 1 & \(>300\)\\
 14 & 62 & 9 & \(>300\)\\
@@ -243,7 +258,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & 0 & 0 & 0\\
 10 & 3 & 0 & \(>300\)\\
 12 & 70 & 1 & \(>300\)\\
 14 & 227 & \(>300\) & \(>300\)\\
@@ -260,7 +274,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & $0/\mathbf{8}$ & $0/\mathbf{8}$ & $0/\mathbf{8}$\\
 10 & $2/\mathbf{10}$ & $1/\mathbf{10}$ & $0/\mathbf{10}$\\
 12 & $7/\mathbf{12}$ & $2/\mathbf{12}$ & $77/\mathbf{12}$\\
 14 & $28/\mathbf{14}$ & $47/\mathbf{14}$ & \(>300/\text{--}\)\\
@@ -272,7 +285,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & $1/\mathbf{8}$ & $1/\mathbf{8}$ & $0/\mathbf{8}$\\
 10 & $2/\mathbf{10}$ & $0/\mathbf{10}$ & $0/\mathbf{10}$\\
 12 & $9/\mathbf{12}$ & $2/\mathbf{12}$ & \(>300/\text{--}\)\\
 14 & $168/\mathbf{14}$ & $14/\mathbf{14}$ & \(>300/\text{--}\)\\
@@ -287,7 +299,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & $0/\mathbf{8}$ & $0/\mathbf{8}$ & $19/\mathbf{8}$\\
 10 & $2/\mathbf{10}$ & $3/\mathbf{10}$ & \(>300/\text{--}\)\\
 12 & $8/\mathbf{12}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 14 & $46/\mathbf{14}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
@@ -299,7 +310,6 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-8 & $1/\mathbf{8}$ & $1/\mathbf{8}$ & $275/\mathbf{8}$\\
 10 & $3/\mathbf{10}$ & $66/\mathbf{10}$ & \(>300/\text{--}\)\\
 12 & $10/\mathbf{12}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 14 & $188/\mathbf{14}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
@@ -340,18 +350,30 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 
 \section{SAT Model}
 
-We encode STS in propositional CNF using two families of literals. The solver interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export with MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from CNF generation (when applicable), and results are written under \texttt{res/SAT/\#}.json in the format required by the project (\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
+We encode STS in propositional CNF using two families of literals. The solver
+interface supports Z3 (direct CNF loading) and PySAT backends (DIMACS export
+with MiniSAT\,22/Glucose\,3). All runs use a $300$s time limit, counted from
+CNF generation (when applicable), and results are written under
+\texttt{res/SAT/\#.json} in the format required by the project
+(\texttt{time}, \texttt{optimal}, \texttt{obj}, \texttt{sol}).
 
 \subsection{Decision variables}
 
 \paragraph{Indexing.}
-Let $n$ be even. We use \emph{Teams} $=\{1,\dots,n\}$, \emph{Weeks} $=\{1,\dots,n-1\}$, and \emph{Periods} $=\{1,\dots,n/2\}$. A schedule is an $(n/2)\times(n-1)$ matrix whose entry $(p,w)$ holds exactly one oriented match $(i,j)$ with $i$ at home and $j$ away.
+We follow the common notation of Section~\ref{sec:intro}: \emph{Teams},
+\emph{Weeks} and \emph{Periods} index rows, columns and slots of the
+$(H,A)$ timetable, and slot $(p,w)$ holds exactly one oriented match
+$(i,j)$ with $i$ at home and $j$ away. The SAT encoding reifies this
+structure into Boolean literals.
 
 \subsubsection*{Decision variables (literals)}
-\begin{itemize}
-\item \textbf{Placement with orientation} $X_{i,j,w,p}$ (Boolean): true iff the match between $i$ and $j$ is played in week $w$, period $p$, with $i$ at home (ordered pair, $i\ne j$). This is the authoritative view of the schedule.
-\item \textbf{Slot occupancy} $Y_{t,w,p}$ (Boolean): true iff team $t$ occupies slot $(w,p)$. These literals are channeled to $X$ locally (one opponent per team per week).
-\end{itemize}
+
+The generic match-at-slot and team-at-slot layers from
+Section~\ref{sec:intro} are reified as Boolean literals: $X_{i,j,w,p}$ and $Y_{t,w,p}$.
+
+These two families are sufficient for the decision version; optimization is
+handled by adding fairness constraints over the same literals as described in
+the objective subsection.
 
 
 \paragraph{Cardinality encodings.}
@@ -468,7 +490,7 @@ $n=18$ & 34\, & 90\, & - & - & - & - \\
 \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
 Instance & SB & no SB & SB & no SB & SB & no SB \\
 \midrule
-$n=16$ & \textbf{1}\, & \textbf{1}\, & \textbf{1}\, & \textbf{1}\, & - & - \\
+$n=16$ & \textbf{1}\, & \textbf{1}\, & \textbf{1}\, & \textbf{1}\, & - & \textbf{1}\ \\
 $n=18$ & \textbf{1}\, & - & - & - & - & - \\
 \bottomrule
 \end{tabular}
@@ -490,42 +512,34 @@ $n=18$ & \textbf{1}\, & - & - & - & - & - \\
 
 \section{MIP Model}
 
-In this section we present the Mixed-Integer Programming (MIP) formulation adopted for the
-Sports Timetabling Scheduling (STS) problem. The model has been implemented in \texttt{Pyomo}
-and solved with different solvers (e.g., CBC, HiGHS, and CPLEX). It follows a two-stage
-optimization procedure: Stage~A aims at finding a feasible period assignment of all matches,
-while Stage~B optimizes the home/away balance for each team given the fixed schedule obtained
-from Stage~A. Both stages are linear and solved sequentially within a fixed overall time budget
-of 300 seconds.
+In this section we present the Mixed-Integer Programming (MIP) formulation
+adopted for the Sports Tournament Scheduling (STS) problem. The model has been
+implemented in \texttt{Pyomo} and solved with different solvers (e.g., CBC,
+HiGHS, and CPLEX). It follows a two-stage optimization procedure: Stage~A aims
+at finding a feasible period assignment of all matches, while Stage~B optimizes
+the home/away balance for each team given the fixed schedule obtained from
+Stage~A. Both stages reuse the common index sets and timetable representation
+of Section~\ref{sec:intro} and are solved sequentially within a fixed overall
+time budget of 300 seconds.
 
 \subsection{Decision variables}
 
 Let $n$ denote the number of teams (even), $W = n-1$ the number of weeks,
-and $P = n/2$ the number of periods per week.  
-Let $\mathcal{E}_w = \{(i,j)\ |\ i<j,\ (i,j)\text{ play in week }w\}$ be the set of matches scheduled
-in week~$w$ according to a round-robin generation.
+and $P = n/2$ the number of periods per week, consistently with
+Section~\ref{sec:intro}.  
+Let $\mathcal{E}_w = \{(i,j)\mid i<j,\ (i,j)\text{ play in week }w\}$ be the
+set of matches scheduled in week~$w$ according to a round-robin generation.
 
-\paragraph{Stage A variables.}
-\begin{itemize}
-    \item $x_{ijwp} \in \{0,1\}$ \quad for all $(i,j,w,p)$ with $(i,j)\in\mathcal{E}_w$ and $p \in \{1,\ldots,P\}$.
+\paragraph{Stage A.}
+Stage~A instantiates the match-at-slot layer of Section~\ref{sec:intro} via
+binary variables $x_{ijwp}\in\{0,1\}$, with $x_{ijwp}=1$ iff match $(i,j)$ in
+week $w$ is assigned to period $p$.
 
-    \noindent
-    $x_{ijwp} = 1$ if and only if the match $(i,j)$ in week~$w$ is assigned to period~$p$.
-\end{itemize}
-
-\paragraph{Stage B variables.}
-\begin{itemize}
-    \item $s_{ijw} \in \{0,1\}$ \quad for all $(i,j,w)$ with $(i,j)\in\mathcal{E}_w$.
-
-    \noindent
-    $s_{ijw} = 1$ if team~$i$ (the lower index) plays \emph{at home} against team~$j$ in week~$w$,
-    and $0$ otherwise.
-    \item $\mathrm{dev}_i \in \mathbb{R}_{\ge 0}$ \quad for all $i \in \{1,\ldots,n\}$.
-
-    \noindent
-    $\mathrm{dev}_i$ measures the deviation of the number of home matches of team~$i$
-    from the ideal average $(n-1)/2$.
-\end{itemize}
+\paragraph{Stage B.}
+Stage~B adds the home/away orientation layer via binary variables
+$s_{ijw}\in\{0,1\}$, where $s_{ijw}=1$ when team $i$ plays at home against
+team $j$ in week $w$; the fairness deviations $\mathrm{dev}_i$ are exactly
+those defined in Section~\ref{sec:intro}.
 
 \subsection{Objective function}
 
@@ -555,50 +569,37 @@ home matches from the ideal target.
 \subsection{Constraints}
 
 \paragraph{Stage A (period assignment).}
-\begin{enumerate}
-    \item \textbf{Unique period per match:}
-    \[
-        \sum_{p=1}^{P} x_{ijwp} = 1
-        \quad \forall (i,j,w)\in\mathcal{E}_w
-    \]
-    Each match in a given week must be scheduled in exactly one period.
-
-    \item \textbf{Unique match per slot:}
-    \[
-        \sum_{(i,j)\in\mathcal{E}_w} x_{ijwp} = 1
-        \quad \forall w \in \{1,\ldots,W\},\ \forall p \in \{1,\ldots,P\}
-    \]
-    Each slot $(w,p)$ can host at most one match.
-
-    \item \textbf{Period cap constraint:}
-    \[
-        \sum_{\substack{(a,b,w)\in\mathcal{E}\\ a=i \text{ or } b=i}} x_{abwp} \le 2
-        \quad \forall i,\ \forall p
-    \]
-    Each team can play in the same period at most twice during the whole tournament.
-
-    \item \textbf{Team-week participation:}
-    \[
-        \sum_{\substack{(a,b,w)\in\mathcal{E}\\ a=i \text{ or } b=i}}
-        \sum_{p=1}^{P} x_{abwp} = 1
-        \quad \forall i,\ \forall w
-    \]
-    Each team must play exactly one match per week.
-
-    \item \textbf{Symmetry breaking:}  
-    To reduce symmetry among equivalent solutions,
-    the first week’s matches are fixed to predefined period indices:
-    \[
-        x_{ij1p} = 1 \quad \text{for the $p$-th pair in week 1.}
-    \]
-\end{enumerate}
+Stage~A enforces a feasible period assignment by the following linear
+constraints:
+\begin{align}
+  \sum_{p=1}^{P} x_{ijwp} &= 1
+    && \forall (i,j,w)\in\mathcal{E}_w
+    && \text{(unique period per match)}, \label{eq:mip-unique-period} \\
+  \sum_{(i,j)\in\mathcal{E}_w} x_{ijwp} &= 1
+    && \forall w \in \{1,\ldots,W\},\ \forall p \in \{1,\ldots,P\}
+    && \text{(unique match per slot)}, \label{eq:mip-unique-slot} \\
+  \sum_{\substack{(a,b,w)\in\mathcal{E}\\ a=i \text{ or } b=i}} x_{abwp} &\le 2
+    && \forall i,\ \forall p
+    && \text{(period cap per team)}, \label{eq:mip-period-cap} \\
+  \sum_{\substack{(a,b,w)\in\mathcal{E}\\ a=i \text{ or } b=i}}
+  \sum_{p=1}^{P} x_{abwp} &= 1
+    && \forall i,\ \forall w
+    && \text{(one match per team and week)}. \label{eq:mip-team-week}
+\end{align}
+To reduce symmetry among equivalent solutions we fix the first week's pairs to
+predefined period indices,
+\[
+  x_{ij1p} = 1 \quad \text{for the $p$-th pair in week 1.}
+\]
 
 \paragraph{Stage B (home/away balance).}
-Constraints for $\mathrm{dev}_i$ are given in the objective definition above.
-An additional symmetry breaking constraint fixes the orientation of the first match:
+Stage~B uses the deviations $\mathrm{dev}_i$ defined in
+Section~\ref{sec:intro} and adds a simple symmetry-breaking rule on the
+orientation of the first match:
 \[
-s_{ij1} = 1 \quad \text{for the first pair $(i,j)$ of week 1.}
+  s_{ij1} = 1 \quad \text{for the first pair $(i,j)$ of week 1.}
 \]
+
 
 \subsection{Validation}
 
@@ -624,7 +625,6 @@ subsequent analysis.
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CBC & Highs & CPLEX\\\midrule
-8 & 0 & 0 & 0\\
 10 & 0 & 0 & 0\\
 12 & 8 & 0 & 0\\
 14 & 9 & 62 & 0\\
@@ -636,7 +636,6 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CBC & Highs & CPLEX\\\midrule
-8 & 0 & 0 & 0\\
 10 & 3 & 0 & 0\\
 12 & 0 & 0 & 0\\
 14 & 166 & 9 & 1\\
@@ -651,7 +650,6 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CBC & Highs & CPLEX\\\midrule
-8 & 0 & 0 & 0\\
 10 & 0 & 0 & 0\\
 12 & 8 & 0 & 0\\
 14 & 9 & 62 & 0\\
@@ -663,7 +661,6 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CBC & Highs & CPLEX\\\midrule
-8 & 0 & 0 & 0\\
 10 & 3 & 0 & 0\\
 12 & 0 & 0 & 0\\
 14 & 169 & 9 & 1\\
@@ -677,7 +674,31 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 
 \section{Conclusions}
 
-Write down briefly your concluding remarks.
+The CP model benefits from global constraints, implied information on period
+usage, and explicit symmetry breaking. On the decision variant these features
+do not always give the fastest answer, but on the optimization variant the
+staged search on $(W,Z,B)$ and the additional structure are essential to prove
+optimality, with \texttt{cp-sat} emerging as the most robust backend on our
+instances.
+
+In the SAT setting, the circle method removes week symmetries up front, and
+fairness is handled by incremental calls over a tolerance parameter. The
+PySAT+DIMACS pipeline highlights the sensitivity to solver heuristics, while
+Z3 profits from an in-memory incremental workflow, especially for
+optimization. 
+
+The MIP approach follows a natural two-stage decomposition and
+can exploit strong off-the-shelf solvers, but scaling to $n=18$ remains
+challenging, in particular for CBC.
+
+Overall, the experiments confirm that no single technology dominates across
+all aspects: CP with a SAT-based backend gives a good balance between
+expressiveness and performance, SAT excels when large Boolean structures and
+incremental solving can be exploited, and MIP is attractive for linear
+decompositions but is more sensitive to solver choice. More importantly, the
+results underline that modelling choices (global constraints, symmetry
+breaking, search order) can be as influential as the choice of solver itself.
+
 
 \section{Authenticity and Author Contribution Statement}
 
