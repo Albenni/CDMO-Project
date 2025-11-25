@@ -310,7 +310,7 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \end{minipage}
 \end{table}
 
-\paragraph{Discussion.}
+\paragraph{Discussion}
 \begin{itemize}\setlength{\itemsep}{2pt}
   \item \textbf{Decision.}
         In the decision version, runs without IC and/or SB often finish sooner
@@ -318,7 +318,7 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
         heavy reasoning. IC adds more checks at each step, and SB can remove
         symmetric solutions that a SAT-based solver might otherwise find quickly.
   \item \textbf{Optimization.}
-        With the staged order \(W\rightarrow Z\rightarrow B\), SB and IC help a
+        With the staged order \(W\!\rightarrow\!Z\!\rightarrow\!B\), SB and IC help a
         lot: the “weeks all different” and the period-profile constraints narrow
         domains before orientations are chosen, and symmetry breaking removes
         duplicate optimal schedules. Together these effects reduce the work needed
@@ -328,8 +328,13 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
         Boolean parts (\(Z,U,B\)) with simple linear sums, which fit SAT-based
         solvers that learn from conflicts. This often does better than pure
         finite-domain propagation when the goal is to get a quick solution.
+  \item \textbf{First solution vs.\ optimality (optimization).}
+        Because \(B\) (home/away) is decided last in the phased search, once a feasible
+        timetable \((W,Z)\) is found the subsequent assignment of \(B\) immediately drives
+        the fairness measure to its theoretical minimum; hence the first \emph{complete}
+        solution is typically already optimal. Conversely, runs that end with no solution
+        usually never reached the \(B\) phase, so no incumbent can be reported.
 \end{itemize}
-
 
 
 
