@@ -16,7 +16,6 @@
 
 \maketitle
 
-
 \section{Introduction}
 \label{sec:intro}
 
@@ -47,26 +46,20 @@ we measure imbalance by
 \]
 and minimize the aggregate deviation $\sum_t \mathrm{dev}_t$.
 
-All models work with two incidence layers:
-a \emph{match-at-slot} view, telling which oriented match is played in each
-slot $(w,p)$, and a \emph{team-at-slot} view, telling whether team $t$ occupies
-slot $(w,p)$. These layers are instantiated by different variable families in
-each formalism (e.g., $Z/U$ in the CP model, $X/Y$ in the SAT encoding, and
-binary assignment variables $x$ in the MIP model), but we refer to them
-generically as match-at-slot and team-at-slot variables to avoid repeating
-the same definitions in every section.
+At modelling level, all approaches use a core \emph{match-at-slot} layer
+describing which oriented match is played in each slot $(w,p)$. In the CP and
+SAT models we also introduce an explicit \emph{team-at-slot} layer indicating
+whether a team $t$ occupies slot $(w,p)$ (arrays $U$ in CP and $Y$ in SAT),
+which is channeled to the match variables. 
 
 \section{CP Model}
 \label{sec:cp-model}
 
-We model Sports Tournament Scheduling in MiniZinc with two variants: a
-\emph{decision} model (\texttt{sts\_decision.mzn}) and an \emph{optimization}
-model (\texttt{sts\_opt.mzn}). Both reuse the common index sets and schedule
-representation introduced in Section~\ref{sec:intro}, namely
-$\text{Teams}$, $\text{Weeks}$, $\text{Periods}$ and the oriented
-$(H,A)$ matrices. In all experiments we consider even values
-$n\in\{8,10,12,14,16,18\}$; the period--usage rule makes $n=4$ infeasible and
-is therefore excluded from the benchmark set.
+Both \emph{decision} (\texttt{sts\_decision.mzn}) and \emph{optimization}
+(\texttt{sts\_opt.mzn}) models use the common index sets and schedule
+representation introduced in Section~\ref{sec:intro}. 
+In all experiments we consider even values
+$n\in\{10,12,14,16,18\}$; 
 
 \noindent\textit{Notation.} Iverson brackets $[\,\cdot\,]$ denote Boolean$\to$integer casts.
 
@@ -113,16 +106,16 @@ We minimize the total home/away imbalance across teams:
 where \(\mathrm{dev}_t\) is the absolute difference between team \(t\)'s number
 of home games and the ideal split \((n-1)/2\). Since each team plays \(n-1\)
 matches (odd), the smallest per–team imbalance is \(1\); accordingly, we post
-the pruning bounds
+the pruning bound
 \[
-  n \ \le\ \mathrm{obj}\ \le\ 2n,
+  n \ \le\ \mathrm{obj}\ \le\ 2n
 \]
-which tighten search without restricting feasibility.
+
 
 \subsection{Constraints}
 \label{subsec:cp-constraints}
 
-\paragraph{Core constraints (both models, \(Z/U\))}
+\paragraph{Core constraints (both models)}
 \begin{itemize}\setlength{\itemsep}{2pt}
   \item \textbf{One match per slot:}
         \(\forall w,p:\ \sum_{i<j} Z_{w,p,i,j}=1\).
@@ -203,7 +196,7 @@ prevent spurious variables from appearing in the arrays.
         staged search inspired by Trick’s \emph{schedule–then–break}%
         ~\cite{TrickScheduleThenBreak}.
         We separate \emph{structure} from \emph{orientation} and execute
-        phases sequentially (no interleaving):\\
+        phases sequentially:\\
         (i) decide the week of each match \(W\) first---this exposes the
         round-robin structure and lets strong globals prune early;\\
         (ii) refine in-week placements \(Z\) once week domains are tight;\\
@@ -222,8 +215,8 @@ prevent spurious variables from appearing in the arrays.
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-10 & 17 & \(>300\) & 0\\
-12 & 3 & \(>300\) & \(>300\)\\
+10 & 15 & \(>300\) & 0\\
+12 & 3 & \(>300\) & 228\\
 14 & 11 & \(>300\) & \(>300\)\\
 16 & \(>300\) & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
@@ -233,10 +226,10 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-10 & 3 & 0 & 80\\
-12 & 75 & 7 & \(>300\)\\
-14 & 200 & \(>300\) & \(>300\)\\
-16 & 131 & \(>300\) & \(>300\)\\
+10 & 3 & 0 & 72\\
+12 & 55 & 6 & \(>300\)\\
+14 & 117 & \(>300\) & \(>300\)\\
+16 & 158 & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{noSB (IC on)}
@@ -247,10 +240,10 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-10 & 83 & 2 & 0\\
-12 & 10 & 1 & \(>300\)\\
-14 & 62 & 9 & \(>300\)\\
-16 & 209 & \(>300\) & \(>300\)\\
+10 & 63 & 2 & 0\\
+12 & 7 & 1 & \(>300\)\\
+14 & 66 & 7 & \(>300\)\\
+16 & 151 & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{noIC (SB on)}
@@ -259,9 +252,9 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 10 & 3 & 0 & \(>300\)\\
-12 & 70 & 1 & \(>300\)\\
-14 & 227 & \(>300\) & \(>300\)\\
-16 & 223 & \(>300\) & \(>300\)\\
+12 & 34 & 0 & \(>300\)\\
+14 & 146 & \(>300\) & \(>300\)\\
+16 & 178 & \(>300\) & \(>300\)\\
 18 & \(>300\) & \(>300\) & \(>300\)\\\bottomrule
 \end{tabular}
 \caption{noIC + noSB}
@@ -274,9 +267,9 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-10 & $2/\mathbf{10}$ & $1/\mathbf{10}$ & $0/\mathbf{10}$\\
-12 & $7/\mathbf{12}$ & $2/\mathbf{12}$ & $77/\mathbf{12}$\\
-14 & $28/\mathbf{14}$ & $47/\mathbf{14}$ & \(>300/\text{--}\)\\
+10 & $1/\mathbf{10}$ & $1/\mathbf{10}$ & $0/\mathbf{10}$\\
+12 & $6/\mathbf{12}$ & $1/\mathbf{12}$ & $65/\mathbf{12}$\\
+14 & $22/\mathbf{14}$ & $44/\mathbf{14}$ & \(>300/\text{--}\)\\
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
@@ -286,8 +279,8 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 10 & $2/\mathbf{10}$ & $0/\mathbf{10}$ & $0/\mathbf{10}$\\
-12 & $9/\mathbf{12}$ & $2/\mathbf{12}$ & \(>300/\text{--}\)\\
-14 & $168/\mathbf{14}$ & $14/\mathbf{14}$ & \(>300/\text{--}\)\\
+12 & $7/\mathbf{12}$ & $2/\mathbf{12}$ & \(>300/\text{--}\)\\
+14 & $141/\mathbf{14}$ & $14/\mathbf{14}$ & \(>300/\text{--}\)\\
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
@@ -299,9 +292,9 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-10 & $2/\mathbf{10}$ & $3/\mathbf{10}$ & \(>300/\text{--}\)\\
-12 & $8/\mathbf{12}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
-14 & $46/\mathbf{14}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
+10 & $1/\mathbf{10}$ & $2/\mathbf{10}$ & \(>300/\text{--}\)\\
+12 & $5/\mathbf{12}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
+14 & $31/\mathbf{14}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
@@ -310,9 +303,9 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
 \begin{minipage}{.48\textwidth}\centering
 \begin{tabular}{l|ccc}\toprule
 $n$ & CP-SAT & Chuffed & Gecode\\\midrule
-10 & $3/\mathbf{10}$ & $66/\mathbf{10}$ & \(>300/\text{--}\)\\
-12 & $10/\mathbf{12}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
-14 & $188/\mathbf{14}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
+10 & $2/\mathbf{10}$ & $70/\mathbf{10}$ & \(>300/\text{--}\)\\
+12 & $7/\mathbf{12}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
+14 & $143/\mathbf{14}$ & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 16 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\
 18 & \(>300/\text{--}\) & \(>300/\text{--}\) & \(>300/\text{--}\)\\\bottomrule
 \end{tabular}
