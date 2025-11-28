@@ -14,7 +14,7 @@ from sat_solvers import (
     export_dimacs,
     run_dimacs_with_pysat_extra,
 )
-from sts_sat_model import build_base_formula
+from sts_sat_model import build_base_formula, _atmost as satmodel_atmost
 from utils import (
     merge_and_dump, 
     _max_var_from, 
@@ -38,9 +38,17 @@ def _parse_sym_flag(argv):
     return True
 
 def _atmost_clauses(lits, bound, pool):
-    """CNF clauses for AtMost: ladder when bound==1, otherwise seqcounter."""
-    enc = EncType.ladder if bound == 1 else EncType.seqcounter
-    return CardEnc.atmost(lits=lits, bound=bound, vpool=pool, encoding=enc).clauses
+    """CNF clauses for AtMost using the same adaptive encoding as sts_sat_model."""
+    return satmodel_atmost(lits, bound, pool)
+
+def _atleast_clauses(lits, bound, pool):
+    """AtLeast(bound) encoded via AtMost on negated literals, with edge cases."""
+    m = len(lits)
+    if bound <= 0:
+        return []
+    if bound >= m:
+        return [[v] for v in lits]  # force all true
+    return satmodel_atmost([-v for v in lits], m - bound, pool)
 
 def _fairness_extra_clauses(pool, home_vars, total_games, d):
     """
@@ -55,12 +63,9 @@ def _fairness_extra_clauses(pool, home_vars, total_games, d):
         # home_i <= half_high
         if half_high < total_games:
             cls += _atmost_clauses(lits, half_high, pool)
-        # home_i >= half_low  <=>  at most (len - half_low) false among the negatives
+        # home_i >= half_low
         if half_low > 0:
-            negs = [-v for v in lits]
-            bound = len(negs) - half_low
-            if bound < len(negs):
-                cls += _atmost_clauses(negs, bound, pool)
+            cls += _atleast_clauses(lits, half_low, pool)
     return cls
 
 # --- Main solver ----------------------------------------------------------------
@@ -88,7 +93,7 @@ def solve_optimization(n: int, solver_name: str, extra_symmetry: bool = True):
     solved = False
 
     suffix = "sym" if extra_symmetry else "nosym"
-    json_solver_key = f"{solver_name}_{suffix}_opt"  # key distinta dal run decision
+    json_solver_key = f"{solver_name}_{suffix}_opt"  # distinct key from run decision
     total_start = time.time()
     gen_time = 0.0
     solve_time = 0.0

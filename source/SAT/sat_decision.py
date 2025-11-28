@@ -57,6 +57,8 @@ def solve_decision(n: int, solver_name: str, extra_symmetry: bool = True):
         s = z3.Solver()
         s.set("timeout", TIME_LIMIT_SEC * 1000)  # in ms
 
+        total_start = time.time()
+
         # Build SAT model
         clauses, _, pool = build_base_formula(n, extra_symmetry=extra_symmetry)
 
@@ -66,7 +68,6 @@ def solve_decision(n: int, solver_name: str, extra_symmetry: bool = True):
         for c in clauses:
             s.add(z3.Or(*[(z3_vars[l] if l > 0 else z3.Not(z3_vars[-l])) for l in c]))
 
-        total_start = time.time()
         t_s = time.time()
         res = s.check()
         solve_time = time.time() - t_s
@@ -85,10 +86,12 @@ def solve_decision(n: int, solver_name: str, extra_symmetry: bool = True):
 
         total_start = time.time()
         t_g = time.time()
+
         # Build SAT model
         clauses, _, pool = build_base_formula(n, extra_symmetry=extra_symmetry)
         max_var = _max_var_from(pool, clauses)
         export_dimacs(clauses, max_var, cnf_path)
+        
         gen_time = time.time() - t_g
 
         # Remaining timeout for solving
