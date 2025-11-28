@@ -325,18 +325,17 @@ $n$ & CP-SAT & Chuffed & Gecode\\\midrule
         lot: the “weeks all different” and the period-profile constraints narrow
         domains before orientations are chosen, and symmetry breaking removes
         duplicate optimal schedules. Together these effects reduce the work needed
-        to prove optimality.
-  \item \textbf{Solver contrast.}
-        \texttt{cp-sat} is usually the most reliable. Our formulation has large
-        Boolean parts (\(Z,U,B\)) with simple linear sums, which fit SAT-based
-        solvers that learn from conflicts. This often does better than pure
-        finite-domain propagation when the goal is to get a quick solution.
-  \item \textbf{First solution vs.\ optimality (optimization).}
+        to prove optimality.\\
         Because \(B\) (home/away) is decided last in the phased search, once a feasible
         timetable \((W,Z)\) is found the subsequent assignment of \(B\) immediately drives
         the fairness measure to its theoretical minimum; hence the first \emph{complete}
-        solution is typically already optimal. Conversely, runs that end with no solution
-        usually never reached the \(B\) phase, so no incumbent can be reported.
+        solution is typically already optimal.
+  \item \textbf{Solver contrast.}
+        \texttt{cp-sat} is usually the most reliable. Our formulation has large
+        Boolean parts (\(Z,U,B\)) with simple linear sums, which fit SAT-based
+        solvers. This often does better than pure
+        finite-domain propagation when the goal is to get a quick solution.
+
 \end{itemize}
 
 
@@ -671,8 +670,8 @@ $n$ & CBC & Highs & CPLEX\\\midrule
 The CP model benefits from global constraints, implied information on period
 usage, and explicit symmetry breaking. On the decision variant these features
 do not always give the fastest answer, but on the optimization variant the
-staged search on $(W,Z,B)$ and the additional structure are essential to prove
-optimality, with \texttt{cp-sat} emerging as the most robust backend on our
+staged search on $(W,Z,B)$ and the additional structure are essential, with 
+\texttt{cp-sat} emerging as the most robust backend on our
 instances.
 
 In the SAT setting, the circle method removes week symmetries up front, and
@@ -686,8 +685,8 @@ can exploit strong off-the-shelf solvers, but scaling to $n=18$ remains
 challenging, in particular for CBC.
 
 Overall, the experiments confirm that no single technology dominates across
-all aspects: CP with a SAT-based backend gives a good balance between
-expressiveness and performance, SAT excels when large Boolean structures and
+all aspects: CP with a SAT-based backend gives a good performance, SAT excels 
+when large Boolean structures and
 incremental solving can be exploited, and MIP is attractive for linear
 decompositions but is more sensitive to solver choice. More importantly, the
 results underline that modelling choices (global constraints, symmetry

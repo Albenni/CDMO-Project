@@ -1,10 +1,12 @@
-% Switches
+% Input switches
 bool: SB;        % Symmetry breaking on/off
 bool: IMPLIED;   % Implied constraints on/off
 
 % Parameters and index sets
 int: n;  % number of teams
-constraint n mod 2 = 0 /\ (n = 2 \/ n > 5);
+constraint n mod 2 = 0;
+constraint n != 4;
+
 
 set of int: Teams   = 1..n;
 set of int: Weeks   = 1..(n - 1);
@@ -15,22 +17,14 @@ array[Periods, Weeks] of var Teams: H;  % home
 array[Periods, Weeks] of var Teams: A;  % away
 
 % Pair placement and occupancy
-array[Weeks, Periods, Teams, Teams] of var bool: Z;  % {i,j} in slot, i<j
-array[Weeks, Periods, Teams] of var bool: U;        % occupancy
-array[Teams, Periods] of var 1..2: C;               % period-usage count (for implied profile / SB anchor)
+array[Weeks, Periods, Teams, Teams] of var bool: Z;  % match at (w,p) between (i,j)
+array[Weeks, Periods, Teams] of var bool: U;        % team t plays at (w,p)
+array[Teams, Periods] of var 1..2: C;               % period-usage count 
 
 % Pair-index cleanup (self-matches and duplicates)
 constraint forall(w in Weeks, p in Periods, i in Teams, j in Teams where i >= j)(
   Z[w,p,i,j] = false
 );
-
-% Symmetry breaking 
-% Week 1 canonical pairing
-constraint SB -> forall(p in Periods)(
-  Z[1, p, 2*p - 1, 2*p] = true
-);
-% Optional period-label anchor (works with implied C): team 1 single-use = Period 1
-constraint SB -> (IMPLIED -> (C[1,1] = 1));
 
 % Core constraints
 % One match per slot
@@ -60,13 +54,23 @@ constraint forall(w in Weeks, p in Periods, t in Teams)(
     sum(i in Teams where i < t)( bool2int(Z[w,p,i,t]) )
 );
 
+
+% Symmetry breaking 
+% Week 1 canonical pairing
+constraint SB -> forall(p in Periods)(
+  Z[1, p, 2*p - 1, 2*p] = true
+);
+% Optional period-label anchor (works with implied C): team 1 single-use = Period 1
+constraint SB -> (IMPLIED -> (C[1,1] = 1));
+
+
 % Implied: exact per-team period profile 
 constraint IMPLIED -> forall(t in Teams, p in Periods)(
-  C[t,p] = sum(w in Weeks)( bool2int(U[w,p,t]) )
+  C[t,p] = sum(w in Weeks)( bool2int(U[w,p,t]) ) % channeling C <-> U
 );
 constraint IMPLIED ->
   forall(t in Teams)(
-    sum(p in Periods)( C[t,p] ) = n - 1 /\
+    sum(p in Periods)( C[t,p] ) = n - 1 /\ % redundant match count per team
     sum(p in Periods)( bool2int(C[t,p] = 1) ) = 1
   );
 
