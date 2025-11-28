@@ -60,7 +60,7 @@ constraint forall(w in Weeks, p in Periods, t in Teams)(
 constraint SB -> forall(p in Periods)(
   Z[1, p, 2*p - 1, 2*p] = true
 );
-% Optional period-label anchor (works with implied C): team 1 single-use = Period 1
+%period-label anchor: team 1 single-use = Period 1
 constraint SB -> (IMPLIED -> (C[1,1] = 1));
 
 

@@ -21,12 +21,16 @@ array[Teams, Periods] of var 1..2: C;                     % period-usage count (
 array[Periods, Weeks] of var Teams: H;                    % output home
 array[Periods, Weeks] of var Teams: A;                    % output away
 
+array[Teams] of var 0..(n - 1): Hc;                       % home-count per team
+array[Teams] of var 1..(n - 1): dev;                      % deviation per team
+
+
 % Pair-index cleanup (self-matches and duplicates)
 constraint forall(w in Weeks, p in Periods, i in Teams, j in Teams where i >= j)(
   Z[w,p,i,j] = false
 );
 constraint forall(i in Teams, j in Teams where i >= j)(
-  B[i,j] = false /\ W[i,j] = 1
+  B[i,j] = false /\ W[i,j] = 1 % defaults for invalid pairs
 );
 
 % Core constraints
@@ -40,13 +44,6 @@ constraint forall(i in Teams, j in Teams where i < j)(
   sum(w in Weeks, p in Periods)( bool2int(Z[w,p,i,j]) ) = 1
 );
 
-% Channeling U <-> Z
-constraint forall(w in Weeks, p in Periods, t in Teams)(
-  bool2int(U[w,p,t]) =
-    sum(j in Teams where t < j)( bool2int(Z[w,p,t,j]) ) +
-    sum(i in Teams where i < t)( bool2int(Z[w,p,i,t]) )
-);
-
 % Weekly participation
 constraint forall(w in Weeks, t in Teams)(
   sum(p in Periods)( bool2int(U[w,p,t]) ) = 1
@@ -57,31 +54,21 @@ constraint forall(t in Teams, p in Periods)(
   sum(w in Weeks)( bool2int(U[w,p,t]) ) <= 2
 );
 
-% Period usage counts (channel always useful)
-constraint forall(t in Teams, p in Periods)(
-  C[t,p] = sum(w in Weeks)( bool2int(U[w,p,t]) )
+% Channeling U <-> Z
+constraint forall(w in Weeks, p in Periods, t in Teams)(
+  bool2int(U[w,p,t]) =
+    sum(j in Teams where t < j)( bool2int(Z[w,p,t,j]) ) +
+    sum(i in Teams where i < t)( bool2int(Z[w,p,i,t]) )
 );
 
-% Implied: exact per-team period profile 
-constraint IMPLIED ->
-  forall(t in Teams)(
-    sum(p in Periods)( C[t,p] ) = n - 1 /\
-    sum(p in Periods)( bool2int(C[t,p] = 1) ) = 1
-  );
-
-% Dual viewpoint: W <-> Z (pair -> week)
+% Dual viewpoint: W <-> Z 
 constraint forall(i in Teams, j in Teams where i < j)(
-  sum(w in Weeks)( bool2int(W[i,j] = w) ) = 1 /\
+  sum(w in Weeks)( bool2int(W[i,j] = w) ) = 1 /\ % redundant
   forall(w in Weeks)(
-    bool2int(W[i,j] = w) = sum(p in Periods)( bool2int(Z[w,p,i,j]) )
+    bool2int(W[i,j] = w) = sum(p in Periods)( bool2int(Z[w,p,i,j]) ) % channeling W <-> Z
   )
 );
 
-% Implied: alldifferent on weeks per team (stronger propagation)
-constraint IMPLIED ->
-  forall(t in Teams)(
-    alldifferent([ W[min(t,j), max(t,j)] | j in Teams where j != t ])
-  );
 
 % Symmetry breaking 
 % Week 1 canonical pairing
@@ -93,29 +80,47 @@ constraint SB -> forall(p in Periods)(
   B[2*p - 1, 2*p] = true
 );
 % Period-label anchor: team 1's single-use period is Period 1
-constraint SB -> (C[1,1] = 1);
+constraint SB -> (IMPLIED -> (C[1,1] = 1));
+
+
+% implied constraints
+%exact per-team period profile 
+constraint IMPLIED -> forall(t in Teams, p in Periods)(
+  C[t,p] = sum(w in Weeks)( bool2int(U[w,p,t]) ) % channeling C <-> U
+);
+constraint IMPLIED ->
+  forall(t in Teams)(
+    sum(p in Periods)( C[t,p] ) = n - 1 /\
+    sum(p in Periods)( bool2int(C[t,p] = 1) ) = 1
+  );
+
+% alldifferent on weeks per team (stronger propagation)
+constraint IMPLIED ->
+  forall(t in Teams)(
+    alldifferent([ W[min(t,j), max(t,j)] | j in Teams where j != t ])
+  );
+
+% global home-count balance and objective LB 
+constraint IMPLIED -> (sum(t in Teams)(Hc[t]) = (n*(n-1)) div 2);
+
 
 % Home counts and fairness objective
-array[Teams] of var 0..(n - 1): Hc;
 constraint forall(t in Teams)(
   Hc[t] =
     sum(j in Teams where t < j)( bool2int(B[t,j]) ) +
     sum(i in Teams where i < t)( 1 - bool2int(B[i,t]) )
 );
 
-array[Teams] of var 1..(n - 1): dev;
+% Objective: minimize total deviation
+
 constraint forall(t in Teams)(
   dev[t] >=  2*Hc[t] - (n - 1) /\
   dev[t] >= -(2*Hc[t] - (n - 1))
 );
-
 var 0..(n * (n - 1)): obj = sum(t in Teams)(dev[t]);
 
-% Implied: global home-count balance and objective LB 
-constraint IMPLIED -> (sum(t in Teams)(Hc[t]) = (n*(n-1)) div 2);
-constraint IMPLIED -> (obj >= n);
-
-% Non-implied pruning cut observed safe for tested instances
+% pruning for obj
+constraint obj >= n;
 constraint obj <= 2*n;
 
 % Output construction from Z and B
