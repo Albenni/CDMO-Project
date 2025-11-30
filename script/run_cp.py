@@ -87,7 +87,7 @@ def parse_flags(argv_tail):
         elif t in ("noic", "noimplied"):
             IC = False
         else:
-            # unknown argument: ignore (be tolerant)
+            # unknown argument: ignore
             pass
     return SB, IC
 
@@ -113,7 +113,7 @@ def resolve_model_path(mode: str) -> str:
 
 
 def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: bool):
-    """Run a model/solver pair; accept incumbents even if status is UNKNOWN; cap time in JSON."""
+    """Run a model/solver pair and return the output dict or None if solver not available."""
     try:
         solver = Solver.lookup(solver_name)
     except Exception:
@@ -122,7 +122,6 @@ def run_one(model_path: str, n: int, solver_name: str, mode: str, SB: bool, IC: 
 
     inst = Instance(solver, Model(model_path))
     inst["n"] = n
-    # The models are expected to expose: bool: SB; bool: IMPLIED;
     inst["SB"] = SB
     inst["IMPLIED"] = IC
 
@@ -226,7 +225,7 @@ def main():
     else:
         results = {}
 
-    for solver_name in solvers_to_run:
+    for solver_name in solvers_to_run:  # Run each solver
         out = run_one(model_path, n, solver_name, mode=mode, SB=SB, IC=IC)
         if out is not None:
             key = compute_key(solver_name, mode, SB, IC)
