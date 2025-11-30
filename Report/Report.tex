@@ -631,8 +631,9 @@ Stage~A and Stage~B according to a user-defined split ratio
 
 A greedy warm-start heuristic was employed to initialize feasible values of $x_{ijwp}$
 before solving Stage~A. Symmetry-breaking constraints were optionally enabled to
-reduce redundant equivalent solutions. Results were exported in JSON format for
-subsequent analysis.
+reduce redundant equivalent solutions.
+The table reports the time to find the first feasible solution. The objective times coincide, since the solver begins improving the 
+objective immediately after obtaining a feasible solution, with no separate phase.
 
 
 \paragraph{Experimental results}
