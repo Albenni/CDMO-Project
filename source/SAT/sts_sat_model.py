@@ -81,7 +81,7 @@ def build_base_formula(n: int, extra_symmetry: bool = True):
     If extra_symmetry=True (default), apply the additional symmetry break that fixes
     the periods of week 1 (_fix_week1_periods). Setting extra_symmetry=False disables
     only that extra fix, keeping the circle-method pruning intact (same complexity,
-    ma senza il vincolo aggiuntivo sulla settimana 1).
+    but without the additional constraint on week 1).
     """
     assert n % 2 == 0 and n >= 2, "n needs to be even and ≥ 2"
 

@@ -448,10 +448,12 @@ We evaluate each instance under a fixed wall-clock cap of $300$\,s measured from
 
 We use two back-ends: (i) \textbf{Z3}, solving the propositional model in memory; (ii) a \textbf{solver-independent} pipeline that exports DIMACS via PySAT and invokes an external SAT solver selected on the command line (e.g., MiniSAT, Glucose).
 
-For decision runs we report wall-clock runtime. For optimization runs we report the best objective value found within the cap together with an \texttt{optimal} flag.
+For decision runs we report wall-clock runtime. 
+For optimization runs we report the time and best objective value found within the cap 
+together with an \texttt{optimal} flag.
 
 \subsubsection*{Experimental results (our runs)}
-Tables~\ref{tab:sat-decision}--\ref{tab:sat-optim} summarize the measured runtimes (seconds) for $n\in\{16,18\}$ on Z3, 
+Tables~\ref{tab:sat-decision}--\ref{tab:sat-optim} summarize the measured runtimes (seconds) for $n\in\{14,16,18\}$ on Z3, 
 MiniSAT\,22, and Glucose\,3, with/without extra symmetry breaking (``SB''). ``-'' denotes a timeout per the rules; 
 a valid entry indicates that a model was found (decision) or an optimal $d$ was proven (optimization).
 
@@ -487,21 +489,47 @@ $n=16$ & 89/\textbf{1}\, & 25/\textbf{1}\, & 165/\textbf{1}\, & 121/\textbf{1}\,
 $n=18$ & 137/\textbf{1}\, & - & - & - & - & - \\
 \bottomrule
 \end{tabular}
-\caption{Optimization SAT: solved status.}
+\caption{Optimization SAT: runtime (s) and optimality value.}
 \label{tab:sat-optim}
 \end{table}
 
 \noindent
 
 \paragraph{Observations.}
-(i) For $n=16$, the PySAT back-end without extra symmetry breaking (SB) is very fast on the \emph{decision} variant with \textsc{MiniSAT22} (4--6s), whereas \textsc{Glucose3} still times out on the \emph{optimization} variant. A plausible cause is our pipeline: the base CNF is exported once, but optimization tests multiple values of $d$ by spawning a fresh CDCL instance and adding fairness clauses each time (no reuse of learned clauses across $d$), which penalizes solvers more sensitive to restart/learning policies.
 
-(ii) For $n=18$, only \textsc{Z3} solved both decision and optimization within the cap. This matches the fact that Z3 runs in-memory and incrementally: we assert the base CNF once and then push/pop only the fairness bounds (no DIMACS I/O, no solver re-initialization across $d$), which reduces overhead and preserves search state across the $d$-loop.
+(i) For $n=14$, all solver/back-end combinations easily solve both the decision
+and the optimization variants. In the decision runs,
+the additional week-1 symmetry slightly slows down Z3,
+while its effect on MiniSAT\,22 and Glucose\,3 is essentially negligible at this
+size. In optimization, all configurations quickly prove the same optimum $d^\star = 1$ within a few seconds.
 
-(iii) Enabling the extra week-1 symmetry sometimes hurts CDCL (e.g., \textsc{MiniSAT22} at $n=16$). This is consistent with known interactions between added SB clauses and branching heuristics: extra structure can constrain the search but also disturb variable activities, worsening the decision order.\cite{martins-impact-sat-modelling}
+(ii) For $n=16$, the decision model is particularly easy for MiniSAT\,22 without
+extra symmetry, whereas Glucose\,3 with SB times out and even
+without SB remains substantially slower. Z3 sits in between. 
+This shows that the additional week-1 symmetry can interact
+badly with CDCL heuristics for some solvers and that, on this encoding,
+Glucose\,3 is less well-suited than MiniSAT\,22 for the pure decision problem.
 
-(iv) Overall, on our model the in-memory incremental path favors \textsc{Z3} as $n$ grows (fewer restarts-from-scratch and cheaper posting of fairness), while the DIMACS+CNF cardinalities in the PySAT path favor \textsc{MiniSAT22} over \textsc{Glucose3} at $n=16$ but degrade under repeated reboots in the optimization loop.
+(iii) In the optimization runs at $n=16$, all back-ends find the same optimum
+$d^\star = 1$, but runtimes vary widely. Our PySAT pipeline
+exports the base CNF once and, for each value of $d$, spawns a fresh CDCL
+instance to which the fairness clauses are added.
+The repeated re-initialization and loss of learnt clauses explain why Z3 scales
+better than most PySAT combinations, even though Glucose\,3+SB happens to be
+very competitive on this specific instance.
 
+(iv) For $n=18$, only Z3 solves both the decision and the optimization variants.
+All PySAT runs, as well as the Z3 optimization run
+without SB, hit the timeout without certifying optimality. This matches the
+expectation that an in-memory incremental solver benefits more from reusing
+learnt information and avoiding repeated DIMACS I/O as the instance size grows.
+
+(v) The extra week-1 symmetry has mixed effects. For MiniSAT\,22 at $n=16$ it
+clearly hurts, while for Glucose\,3 on optimization it dramatically helps.
+This is consistent with the known trade-offs of symmetry breaking in SAT: 
+additional structure can shrink the search space but
+also disturb activity-based branching heuristics, so the net effect is
+solver- and instance-dependent.
 
 \section{MIP Model}
 
