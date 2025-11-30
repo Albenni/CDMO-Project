@@ -433,11 +433,6 @@ all week permutations. (B) \emph{Local (toggle)}: in week~1 the pair $(i,n\!+\!1
 to period $i$, and match $(1,n)$ is oriented as home for team~1 in $(w,p)=(1,1)$. This removes
 residual week/period/orientation symmetries while preserving feasibility.
 
-\subsubsection*{Solvers and interfaces}
-\textbf{Z3.} We declare Boolean atoms $v_1,\dots,v_{V}$ and post each CNF clause as a Z3 disjunction; the $300$s limit is passed as a per-call timeout in milliseconds.
-\textbf{PySAT backends.} We export CNF to DIMACS (\texttt{pysat.formula.CNF.to\_file}) and run the selected solver with a hard timeout using \texttt{solve\_limited} plus a watchdog \texttt{interrupt}; for optimization we reuse the same DIMACS and add per-$d$ fairness clauses. All solvers are used sequentially, as required.
-
-
 \paragraph{Why these modelling choices?}
 Symmetry breaking and encoding selection strongly affect SAT performance; we deliberately (i) fix a canonical week assignment via the circle method, (ii) keep local $X\!\leftrightarrow\!Y$ channels to obtain short clauses, and (iii) adapt cardinality encodings to scope/threshold. These choices are consistent with the recommendations on the impact of modelling (and symmetry breaking) in SAT problem solving~\cite{martins-impact-sat-modelling}.
 
@@ -452,7 +447,7 @@ For decision runs we report wall-clock runtime.
 For optimization runs we report the time and best objective value found within the cap 
 together with an \texttt{optimal} flag.
 
-\subsubsection*{Experimental results (our runs)}
+\subsubsection*{Experimental results}
 Tables~\ref{tab:sat-decision}--\ref{tab:sat-optim} summarize the measured runtimes (seconds) for $n\in\{14,16,18\}$ on Z3, 
 MiniSAT\,22, and Glucose\,3, with/without extra symmetry breaking (``SB''). ``-'' denotes a timeout per the rules; 
 a valid entry indicates that a model was found (decision) or an optimal $d$ was proven (optimization).

@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 # Decide N:
-# - if we're interactive (TTY) and no argument was passed -> prompt
+# - if we're interactive and no argument was passed -> prompt
 # - otherwise use $1 or default 18
 if [ -t 0 ] && [ "${1-}" = "" ]; then
   # avoid set -e causing a failure on read in case of EOF

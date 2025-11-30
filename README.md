@@ -1,3 +1,14 @@
+# All instances
+
+To all the instances for the experiments in the report, we created a single bash script to run them all sequentially:
+
+```bash
+./script/run_all.sh <N>
+```
+
+Where `<N>` is the number of teams.
+This script will run all CP, SAT, and MIP experiments for the given number of teams, and store the results in the respective `res/` subdirectories and check for correctness using the solution checker.
+
 # CP
 
 ## Main scripts
@@ -24,6 +35,17 @@ python script/run_cp.py <dec|opt> <N> [noSB] [noIC] [--solver <cp-sat|chuffed|ge
   cp-sat_dec, cp-sat_dec_noSB, cp-sat_opt_noIC, chuffed_opt_noSB_noIC, ...
 
 # SAT
+
+# Run all parameters automatically
+
+To run all SAT experiments for the given number of teams, use:
+
+```bash
+./script/run_sat.sh <N>
+```
+
+Where `<N>` is the number of teams.
+The script will run all SAT experiments for the given number of teams, and store the results in the respective `res/` subdirectories and check for correctness using the solution checker.
 
 ## Main scripts
 
