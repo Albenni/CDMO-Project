@@ -187,7 +187,7 @@ def solve_optimization(n: int, solver_name: str, extra_symmetry: bool = True):
     }
 
     out_dir = os.path.join("res", "SAT")
-    final_key, full_data = merge_and_dump(out_dir, n, json_solver_key, entry, extra_symmetry)
+    final_key, _ = merge_and_dump(out_dir, n, json_solver_key, entry, extra_symmetry)
     return {final_key: entry}
 
 
